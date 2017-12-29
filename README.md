@@ -1,2 +1,2 @@
-# hybrid_parallel_util
-A MPI+OpenMP hybrid parallel utility package
+# HPU
+A C++11 MPI+OpenMP Hybrid Parallel Utility Package
