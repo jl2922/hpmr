@@ -1,2 +1,3 @@
-# HPU
-A C++11 MPI+OpenMP Hybrid Parallel Utility Package
+# HPMR
+MPI+OpenMP Hybrid Parallel MapReduce in C++.
+
