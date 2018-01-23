@@ -3,20 +3,17 @@
 #include "gtest/gtest.h"
 
 TEST(DistRangeTest, MapTest) {
-  DistRange range(1, 10);
+  hpmr::DistRange<int> range(0, 10);
 
-  std::vector<bool> visited(10, false);
-  auto mapper = [&](const long long val, const std::function<void(const int, const int)>& emit) {
+  std::vector<int> vec(10, 0);
+  auto mapper = [&](const int id, const std::function<void(const int, const int)>& emit) {
     (void)emit;
-    EXPECT_THAT(val, testing::Ge(1));
-    EXPECT_THAT(val, testing::Le(10));
-    printf("called %d", val);
-    visited[val - 1] = true;
+    EXPECT_THAT(id, testing::Ge(0));
+    EXPECT_THAT(id, testing::Lt(10));
+    vec[id] = id;
   };
 
-  for (const auto& val : visited) {
-    EXPECT_TRUE(val);
-  }
-
   range.map<int, int, std::hash<int>>(mapper);
+
+  for (int i = 0; i < 10; i++) EXPECT_EQ(vec[i], i);
 }
