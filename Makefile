@@ -21,12 +21,12 @@ GTEST_DIR := gtest/googletest
 GMOCK_DIR := gtest/googlemock
 GTEST_ALL_SRC := ${GTEST_DIR}/src/gtest-all.cc
 GMOCK_ALL_SRC := ${GMOCK_DIR}/src/gmock-all.cc
-TEST_MAIN_SRC := ${GMOCK_DIR}/src/gmock_main.cc
+TEST_MAIN_SRC := gtest_main_mpi.cc
 TEST_MAIN_OBJ := $(BUILD_DIR)/gtest_main.o
 TEST_CXXFLAGS := $(CXXFLAGS) -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include -pthread
 TEST_LIB := $(BUILD_DIR)/libgtest.a
 
-.PHONY: all test test_all clean
+.PHONY: all test test_mpi test_all clean
 
 .SUFFIXES:
 
@@ -35,8 +35,11 @@ all: test
 test: $(TEST_EXE)
 	./$(TEST_EXE) --gtest_filter=-*LargeTest.*
 
+test_mpi: $(TEST_EXE)
+	mpirun -n 2 ./$(TEST_EXE) --gtest_filter=-*LargeTest.*
+
 test_all: $(TEST_EXE)
-	./$(TEST_EXE)
+	mpirun -n 2 ./$(TEST_EXE)
 
 clean:
 	rm -rf $(BUILD_DIR)

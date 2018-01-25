@@ -1,5 +1,9 @@
-#include "mpi.h"
-#include "omp.h"
+#ifndef HPMR_PARALLEL_H_
+#define HPMR_PARALLEL_H_
+
+#include <mpi.h>
+#include <omp.h>
+#include "mpi_type_util.h"
 
 namespace hpmr {
 class Parallel {
@@ -8,7 +12,12 @@ class Parallel {
 
   static int get_n_procs() { return get_instance().n_procs; }
 
+  static int get_thread_id() { return omp_get_thread_num(); }
+
   static int get_n_threads() { return get_instance().n_threads; }
+
+  template <class T>
+  static T reduce_sum(const T& t);
 
  private:
   int proc_id;
@@ -19,8 +28,6 @@ class Parallel {
 
   Parallel();
 
-  ~Parallel();
-
   static Parallel get_instance() {
     static Parallel instance;
     return instance;
@@ -28,22 +35,18 @@ class Parallel {
 };
 
 Parallel::Parallel() {
-  int initialized;
-  MPI_Initialized(&initialized);
-  if (!initialized) {
-    MPI_Init(nullptr, nullptr);
-  }
   MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
   MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
   n_threads = omp_get_max_threads();
 }
 
-Parallel::~Parallel() {
-  int finalized;
-  MPI_Finalized(&finalized);
-  if (!finalized) {
-    MPI_Finalize();
-  }
+template <class T>
+T Parallel::reduce_sum(const T& t) {
+  T res;
+  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
+  return res;
 }
 
 }  // namespace hpmr
+
+#endif
