@@ -1,4 +1,9 @@
+#ifndef DIST_MAP_H
+#define DIST_MAP_H
+
+#include <functional>
 #include "parallel.h"
+#include "reducer.h"
 
 namespace hpmr {
 
@@ -7,15 +12,18 @@ class DistMap {
  public:
   DistMap();
 
-  void set(const K& key, const V& value);
+  void set(
+      const K& key,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
-  void set(const K& key, const V& value, const std::function<void(V&, const V&)>& reducer);
-
-  void get(const K& key, const std::function<void(V&)>& user);
+  void get(const K& key, const std::function<void(V&)>& handler);
 
   V get_copy_or_default(const K& key, const V& default_value);
 
   unsigned long long get_n_keys();
+
+  void sync();
 
   template <class KR, class VR, class HR>
   DistMap<KR, VR, HR> mapreduce(
@@ -34,7 +42,7 @@ DistMap<K, V, H>::DistMap() {
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::set(const K&, const V&) {
+void DistMap<K, V, H>::set(const K&, const V&, const std::function<void(V&, const V&)>&) {
 #pragma omp atomic
   n_keys++;
 }
@@ -44,4 +52,9 @@ unsigned long long DistMap<K, V, H>::get_n_keys() {
   return Parallel::reduce_sum(n_keys);
 }
 
+template <class K, class V, class H>
+void DistMap<K, V, H>::sync() {}
+
 }  // namespace hpmr
+
+#endif

@@ -1,5 +1,5 @@
-#ifndef HPMR_PARALLEL_H_
-#define HPMR_PARALLEL_H_
+#ifndef HPMR_PARALLEL_H
+#define HPMR_PARALLEL_H
 
 #include <mpi.h>
 #include <omp.h>
