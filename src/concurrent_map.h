@@ -9,10 +9,11 @@
 #include "reducer.h"
 
 constexpr static size_t N_INITIAL_BUCKETS = 11;
-constexpr static size_t N_SEGMENTS_PER_THREAD = 4;
+constexpr static size_t N_SEGMENTS_PER_THREAD = 5;
 constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
 namespace hpmr {
+
 template <class K, class V, class H = std::hash<K>>
 class ConcurrentMap {
  public:
@@ -44,6 +45,10 @@ class ConcurrentMap {
 
   void get(const K& key, const std::function<void(const V&)>& handler);
 
+  V get(const K& key, const V& default_value = V());
+
+  // Iteratively get each key value pair.
+  // Blocks all the other operations.
   void get_each(const std::function<void(const K&, const V&)>& handler);
 
   void unset(const K& key);
@@ -93,7 +98,7 @@ class ConcurrentMap {
       const K& key, const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
 
   // Apply node_handler to all the hash nodes.
-  void hash_node_apply(const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
+  void hash_node_all_apply(const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
 
   // Recursively find the node with the specified key on the list starting from the node specified.
   // Then apply the specified handler to that node.
@@ -104,7 +109,7 @@ class ConcurrentMap {
       const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
 
   // Recursively apply the handler to each node on the list from the node specified (post-order).
-  void hash_node_apply_recursive(
+  void hash_node_all_apply_recursive(
       std::unique_ptr<hash_node>& node,
       const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
 
@@ -135,8 +140,16 @@ ConcurrentMap<K, V, H>::~ConcurrentMap() {
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
-  lock_all_segments();
+  auto& first_lock = segment_locks[0];
+  omp_set_lock(&first_lock);
+  if (n_buckets >= n_rehashing_buckets) {
+    omp_unset_lock(&first_lock);
+    return;
+  }
 
+  omp_unset_lock(&first_lock);
+  lock_all_segments();
+  printf("Lock and rehash %zu\n", n_rehashing_buckets);
   // No decrease in the number of buckets.
   if (n_buckets >= n_rehashing_buckets) {
     unlock_all_segments();
@@ -161,7 +174,7 @@ void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
   };
 #pragma omp parallel for
   for (size_t i = 0; i < n_buckets; i++) {
-    hash_node_apply_recursive(buckets[i], node_handler);
+    hash_node_all_apply_recursive(buckets[i], node_handler);
   }
 
   buckets = std::move(rehashing_buckets);
@@ -173,40 +186,38 @@ template <class K, class V, class H>
 size_t ConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_in) const {
   // Returns a number that is greater than or equal to n_buckets_in.
   // That number is either a prime number itself, or a product of two prime numbers.
-  constexpr size_t PRIME_NUMBERS[] = {11,   17,    29,    47,    79,    127,   211,
-                                      337,  547,   887,   1433,  2311,  3739,  6053,
-                                      9791, 15858, 25667, 41539, 67213, 104729};
-  constexpr size_t N_PRIME_NUMBERS = sizeof(PRIME_NUMBERS) / sizeof(size_t);
-  constexpr size_t LAST_PRIME_NUMBER = PRIME_NUMBERS[N_PRIME_NUMBERS - 1];
-  constexpr size_t DIVISION_FACTOR = 15858;
+  constexpr size_t PRIMES[] = {
+      11, 17, 29, 47, 79, 127, 211, 337, 547, 887, 1433, 2311, 3739, 6053, 9791, 15859};
+  constexpr size_t N_PRIMES = sizeof(PRIMES) / sizeof(size_t);
+  constexpr size_t LAST_PRIME = PRIMES[N_PRIMES - 1];
   size_t remaining_factor = n_buckets_in;
   size_t n_rehashing_buckets = 1;
-  for (size_t i = 0; i < 3; i++) {
-    if (remaining_factor > LAST_PRIME_NUMBER) {
-      remaining_factor /= DIVISION_FACTOR;
-      n_rehashing_buckets *= DIVISION_FACTOR;
-    }
+  while (remaining_factor > LAST_PRIME) {
+    remaining_factor /= LAST_PRIME;
+    n_rehashing_buckets *= LAST_PRIME;
   }
-  if (remaining_factor > LAST_PRIME_NUMBER) throw std::invalid_argument("n_buckets too large");
-  size_t left = 0, right = N_PRIME_NUMBERS - 1;
+
+  // Find a prime larger than or equal to the remaining factor.
+  size_t left = 0, right = N_PRIMES - 1;
   while (left < right) {
     size_t mid = (left + right) / 2;
-    if (PRIME_NUMBERS[mid] < remaining_factor) {
+    if (PRIMES[mid] < remaining_factor) {
       left = mid + 1;
     } else {
       right = mid;
     }
   }
-  n_rehashing_buckets *= PRIME_NUMBERS[left];
+
+  n_rehashing_buckets *= PRIMES[left];
   return n_rehashing_buckets;
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::set(const K& key, const std::function<void(V&, const V&)>& reducer) {
+void ConcurrentMap<K, V, H>::set(
+    const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (!node) {
-      node.reset(new hash_node(key, V()));
-      setter(node->value);
+      node.reset(new hash_node(key, value));
 #pragma omp atomic
       n_keys++;
     } else {
@@ -218,21 +229,21 @@ void ConcurrentMap<K, V, H>::set(const K& key, const std::function<void(V&, cons
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::set(
-    const K& key, const std::function<void(V&)>& setter, const V& default_value) {
+void ConcurrentMap<K, V, H>::get(const K& key, const std::function<void(const V&)>& handler) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
-    if (!node) {
-      V value(default_value);
-      setter(value);
-      node.reset(new hash_node(key, value));
-#pragma omp atomic
-      n_keys++;
-    } else {
-      setter(node->value);
-    }
+    if (node) handler(node->value);
   };
   hash_node_apply(key, node_handler);
-  if (n_keys >= n_buckets * max_load_factor) rehash();
+}
+
+template <class K, class V, class H>
+V ConcurrentMap<K, V, H>::get(const K& key, const V& default_value) {
+  V value(default_value);
+  const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
+    if (node) value = node->value;
+  };
+  hash_node_apply(key, node_handler);
+  return value;
 }
 
 template <class K, class V, class H>
@@ -258,72 +269,12 @@ bool ConcurrentMap<K, V, H>::has(const K& key) {
 }
 
 template <class K, class V, class H>
-V ConcurrentMap<K, V, H>::get_copy_or_default(const K& key, const V& default_value) {
-  V value(default_value);
-  const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
-    if (node) value = node->value;
-  };
-  hash_node_apply(key, node_handler);
-  return value;
-}
-
-template <class K, class V, class H>
-template <class W>
-W ConcurrentMap<K, V, H>::map(
-    const K& key, const std::function<W(const V&)>& mapper, const W& default_value) {
-  W mapped_value(default_value);
-  const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
-    if (node) mapped_value = mapper(node->value);
-  };
-  hash_node_apply(key, node_handler);
-  return mapped_value;
-}
-
-template <class K, class V, class H>
-template <class W>
-W ConcurrentMap<K, V, H>::map_reduce(
-    const std::function<W(const K&, const V&)>& mapper,
-    const std::function<void(W&, const W&)>& reducer,
-    const W& default_value) {
-  std::vector<W> thread_reduced_values(n_threads, default_value);
-  W reduced_value = default_value;
-  const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
-    const size_t thread_id = omp_get_thread_num();
-    const W& mapped_value = mapper(node->key, node->value);
-    reducer(thread_reduced_values[thread_id], mapped_value);
-  };
-  hash_node_apply(node_handler);
-  for (const auto& value : thread_reduced_values) reducer(reduced_value, value);
-  return reduced_value;
-}
-
-template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::apply(const K& key, const std::function<void(const V&)>& handler) {
-  const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
-    if (node) handler(node->value);
-  };
-  hash_node_apply(key, node_handler);
-}
-
-template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::apply(const std::function<void(const K&, const V&)>& handler) {
-  const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
-    handler(node->key, node->value);
-  };
-  hash_node_apply(node_handler);
-}
-
-template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::clear() {
   lock_all_segments();
-
 #pragma omp parallel for
   for (size_t i = 0; i < n_buckets; i++) {
     buckets[i].reset();
   }
-
-  buckets.resize(N_INITIAL_BUCKETS);
-  for (auto& bucket : buckets) bucket.reset();
   n_keys = 0;
   unlock_all_segments();
 }
@@ -350,13 +301,12 @@ void ConcurrentMap<K, V, H>::hash_node_apply(
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::hash_node_apply(
+void ConcurrentMap<K, V, H>::hash_node_all_apply(
     const std::function<void(std::unique_ptr<hash_node>&)>& node_handler) {
   lock_all_segments();
-// For a good hash function, a static schedule shall provide both a good balance and speed.
 #pragma omp parallel for
   for (size_t i = 0; i < n_buckets; i++) {
-    hash_node_apply_recursive(buckets[i], node_handler);
+    hash_node_all_apply_recursive(buckets[i], node_handler);
   }
   unlock_all_segments();
 }
@@ -378,12 +328,12 @@ void ConcurrentMap<K, V, H>::hash_node_apply_recursive(
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::hash_node_apply_recursive(
+void ConcurrentMap<K, V, H>::hash_node_all_apply_recursive(
     std::unique_ptr<hash_node>& node,
     const std::function<void(std::unique_ptr<hash_node>&)>& node_handler) {
   if (node) {
     // Post-order traversal for rehashing.
-    hash_node_apply_recursive(node->next, node_handler);
+    hash_node_all_apply_recursive(node->next, node_handler);
     node_handler(node);
   }
 }
@@ -397,6 +347,7 @@ template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::unlock_all_segments() {
   for (auto& lock : segment_locks) omp_unset_lock(&lock);
 }
+
 }  // namespace hpmr
 
 #endif
