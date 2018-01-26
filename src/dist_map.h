@@ -5,6 +5,9 @@
 #include "parallel.h"
 #include "reducer.h"
 
+static const size_t N_INITIAL_BUCKETS = 5;
+static const size_t N_SEGMENTS_PER_THREAD = 5;
+
 namespace hpmr {
 
 template <class K, class V, class H>
@@ -21,7 +24,7 @@ class DistMap {
 
   V get_copy_or_default(const K& key, const V& default_value);
 
-  unsigned long long get_n_keys();
+  size_t get_n_keys();
 
   void sync();
 
@@ -33,7 +36,26 @@ class DistMap {
       const bool verbose = false);
 
  private:
-  unsigned long long n_keys;
+  size_t n_keys;
+
+  size_t n_buckets;
+
+  double max_load_factor;
+
+  size_t n_segments;
+
+  H hasher;
+
+  std::vector<omp_lock_t> segment_locks;
+
+  struct hash_node {
+    K key;
+    V value;
+    std::unique_ptr<hash_node> next;
+    hash_node(const K& key, const V& value) : key(key), value(value){};
+  };
+
+  std::vector<std::unique_ptr<hash_node>> buckets;
 };
 
 template <class K, class V, class H>
@@ -48,7 +70,7 @@ void DistMap<K, V, H>::set(const K&, const V&, const std::function<void(V&, cons
 }
 
 template <class K, class V, class H>
-unsigned long long DistMap<K, V, H>::get_n_keys() {
+size_t DistMap<K, V, H>::get_n_keys() {
   return Parallel::reduce_sum(n_keys);
 }
 
