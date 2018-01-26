@@ -2,11 +2,13 @@
 #define DIST_MAP_H
 
 #include <functional>
+#include <vector>
 #include "parallel.h"
 #include "reducer.h"
 
-static const size_t N_INITIAL_BUCKETS = 5;
-static const size_t N_SEGMENTS_PER_THREAD = 5;
+static const size_t N_INITIAL_BUCKETS = 11;
+static const size_t N_SEGMENTS_PER_THREAD = 4;
+static const double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
 namespace hpmr {
 
@@ -48,6 +50,9 @@ class DistMap {
 
   std::vector<omp_lock_t> segment_locks;
 
+  // For parallel rehashing (Require omp_set_nested(1)).
+  std::vector<omp_lock_t> rehashing_segment_locks;
+
   struct hash_node {
     K key;
     V value;
@@ -61,6 +66,14 @@ class DistMap {
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
   n_keys = 0;
+  n_buckets = N_INITIAL_BUCKETS;
+  buckets.resize(n_buckets);
+  max_load_factor = DEFAULT_MAX_LOAD_FACTOR;
+  n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
+  segment_locks.resize(n_segments);
+  rehashing_segment_locks.resize(n_segments);
+  for (auto& lock : segment_locks) omp_init_lock(&lock);
+  for (auto& lock: rehashing_segment_locks) omp_init_lock(&lock);
 }
 
 template <class K, class V, class H>
