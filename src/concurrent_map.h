@@ -9,7 +9,7 @@
 #include "reducer.h"
 
 constexpr static size_t N_INITIAL_BUCKETS = 11;
-constexpr static size_t N_SEGMENTS_PER_THREAD = 5;
+constexpr static size_t N_SEGMENTS_PER_THREAD = 7;
 constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
 namespace hpmr {
@@ -149,8 +149,6 @@ void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
 
   omp_unset_lock(&first_lock);
   lock_all_segments();
-  printf("Lock and rehash %zu\n", n_rehashing_buckets);
-  // No decrease in the number of buckets.
   if (n_buckets >= n_rehashing_buckets) {
     unlock_all_segments();
     return;
