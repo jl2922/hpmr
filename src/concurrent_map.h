@@ -21,10 +21,7 @@ class ConcurrentMap {
 
   ~ConcurrentMap();
 
-  void reserve(const size_t n_buckets) {
-    const size_t n_rehashing_buckets = get_n_rehashing_buckets(n_buckets);
-    rehash(n_rehashing_buckets);
-  };
+  void reserve(const size_t n_buckets_min);
 
   size_t get_n_buckets() const { return n_buckets; };
 
@@ -46,10 +43,6 @@ class ConcurrentMap {
   void get(const K& key, const std::function<void(const V&)>& handler);
 
   V get(const K& key, const V& default_value = V());
-
-  // Iteratively get each key value pair.
-  // Blocks all the other operations.
-  void get_each(const std::function<void(const K&, const V&)>& handler);
 
   void unset(const K& key);
 
@@ -84,7 +77,7 @@ class ConcurrentMap {
 
   std::vector<std::unique_ptr<hash_node>> buckets;
 
-  void rehash() { reserve(n_keys / max_load_factor); }
+  void rehash();
 
   void rehash(const size_t n_rehashing_buckets);
 
@@ -136,6 +129,18 @@ ConcurrentMap<K, V, H>::~ConcurrentMap() {
   clear();
   for (auto& lock : segment_locks) omp_destroy_lock(&lock);
   for (auto& lock : rehashing_segment_locks) omp_destroy_lock(&lock);
+}
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::reserve(const size_t n_buckets_min) {
+  if (n_buckets >= n_buckets_min) return;
+  const size_t n_rehashing_buckets = get_n_rehashing_buckets(n_buckets_min);
+  rehash(n_rehashing_buckets);
+};
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::rehash() {
+  reserve(n_keys / max_load_factor);
 }
 
 template <class K, class V, class H>

@@ -59,18 +59,6 @@ TEST(ConcurrentMapTest, SetAndGet) {
   m2.get("cc", [](const int value) { EXPECT_EQ(value, 3); });
 }
 
-TEST(ConcurrentMapTest, GetEach) {
-  hpmr::ConcurrentMap<int, int> m;
-  constexpr int N_KEYS = 100;
-  for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
-  }
-  std::vector<bool> found(N_KEYS, false);
-  m.get_each([&](const int key, const int) {
-    found[key] = true;
-  });
-}
-
 TEST(ConcurrentMapTest, Unset) {
   hpmr::ConcurrentMap<std::string, int> m;
   m.set("aa", 1);
