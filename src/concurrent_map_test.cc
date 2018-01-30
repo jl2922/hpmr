@@ -28,7 +28,6 @@ TEST(ConcurrentMapTest, InsertAndRehash) {
 TEST(ConcurrentMapTest, ParallelInsertAndRehash) {
   hpmr::ConcurrentMap<int, int> m;
   constexpr int N_KEYS = 1000;
-  omp_set_nested(1);  // For parallel rehashing.
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, i);

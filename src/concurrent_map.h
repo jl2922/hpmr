@@ -120,6 +120,7 @@ ConcurrentMap<K, V, H>::ConcurrentMap() {
   n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
   segment_locks.resize(n_segments);
   rehashing_segment_locks.resize(n_segments);
+  omp_set_nested(1);  // For parallel rehashing.
   for (auto& lock : segment_locks) omp_init_lock(&lock);
   for (auto& lock : rehashing_segment_locks) omp_init_lock(&lock);
 }
