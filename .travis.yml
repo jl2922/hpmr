@@ -5,16 +5,9 @@ compiler:
   - gcc
 os:
   - linux
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      - g++-6
 env:
-  - CXX_COMPILER=g++-6 C_COMPILER=gcc-6 TOOLS_DIR=$TRAVIS_BUILD_DIR/tools
+  - TOOLS_DIR=$TRAVIS_BUILD_DIR/tools
 before_install:
-  - which g++-6
   - git submodule update --init --remote --recursive
 script: bash ./ci.sh
 cache:

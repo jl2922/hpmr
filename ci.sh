@@ -18,7 +18,7 @@ else
 	echo "Configuring and building OpenMPI"
 	cd openmpi-3.0.0
   mkdir -p $TOOLS_DIR/openmpi
-	./configure --prefix=$TOOLS_DIR/openmpi CC=$C_COMPILER CXX=$CXX_COMPILER
+	./configure --prefix=$TOOLS_DIR/openmpi
 	make -j 8
 	make install
 	echo "Completed"
