@@ -8,10 +8,6 @@
 #include "parallel.h"
 #include "reducer.h"
 
-constexpr static size_t N_INITIAL_BUCKETS = 11;
-constexpr static size_t N_SEGMENTS_PER_THREAD = 7;
-constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
-
 namespace hpmr {
 
 template <class K, class V, class H>
@@ -21,6 +17,8 @@ template <class K, class V, class H = std::hash<K>>
 class ConcurrentMap {
  public:
   ConcurrentMap();
+
+  ConcurrentMap(const ConcurrentMap& m);
 
   ~ConcurrentMap();
 
@@ -67,8 +65,6 @@ class ConcurrentMap {
 
   double max_load_factor;
 
-  size_t n_threads;
-
   size_t n_segments;
 
   H hasher;
@@ -86,6 +82,12 @@ class ConcurrentMap {
   };
 
   std::vector<std::unique_ptr<hash_node>> buckets;
+
+  constexpr static size_t N_INITIAL_BUCKETS = 11;
+
+  constexpr static size_t N_SEGMENTS_PER_THREAD = 7;
+
+  constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
   void rehash();
 
@@ -128,11 +130,34 @@ ConcurrentMap<K, V, H>::ConcurrentMap() {
   n_keys = 0;
   n_buckets = N_INITIAL_BUCKETS;
   buckets.resize(n_buckets);
-  max_load_factor = DEFAULT_MAX_LOAD_FACTOR;
+  set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
   n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
   segment_locks.resize(n_segments);
   rehashing_segment_locks.resize(n_segments);
+  for (auto& lock : segment_locks) omp_init_lock(&lock);
+  for (auto& lock : rehashing_segment_locks) omp_init_lock(&lock);
   omp_set_nested(1);  // For parallel rehashing.
+}
+
+template <class K, class V, class H>
+ConcurrentMap<K, V, H>::ConcurrentMap(const ConcurrentMap<K, V, H>& m) {
+  n_keys = m.n_keys;
+  n_buckets = m.n_buckets;
+  buckets.resize(n_buckets);
+  max_load_factor = m.max_load_factor;
+  n_segments = m.n_segments;
+#pragma omp parallel for
+  for (size_t i = 0; i < n_buckets; i++) {
+    hash_node* ptr_src = m.buckets[i].get();
+    hash_node* ptr_dest = buckets[i].get();
+    while (ptr_src != nullptr) {
+      ptr_dest = new hash_node(ptr_src->key, ptr_src->value);
+      ptr_src = ptr_src->next.get();
+      ptr_dest = ptr_dest->next.get();
+    }
+  }
+  segment_locks.resize(n_segments);
+  rehashing_segment_locks.resize(n_segments);
   for (auto& lock : segment_locks) omp_init_lock(&lock);
   for (auto& lock : rehashing_segment_locks) omp_init_lock(&lock);
 }

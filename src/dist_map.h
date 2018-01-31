@@ -2,9 +2,9 @@
 #define DIST_MAP_H
 
 #include <functional>
+#include "concurrent_map.h"
 #include "parallel.h"
 #include "reducer.h"
-#include "concurrent_map.h"
 
 namespace hpmr {
 
@@ -23,9 +23,7 @@ class DistMap {
 
   double get_max_load_factor() { return max_load_factor; }
 
-  void set_max_load_factor(const double max_load_factor) {
-    this->max_load_factor = max_load_factor;
-  }
+  void set_max_load_factor(const double max_load_factor);
 
   size_t get_n_keys();
 
@@ -51,7 +49,7 @@ class DistMap {
       const std::function<void(VR&, const VR&)>& reducer,
       const bool verbose = false);
 
-  void sync();
+  void sync(const bool verbose = false);
 
  private:
   size_t n_keys;
@@ -60,18 +58,36 @@ class DistMap {
 
   ConcurrentMap<K, V, H> local_map;
 
-  DistMap(const DistMap&) = delete;
+  std::vector<ConcurrentMap<K, V, H>> remote_maps;
 
-  // std::vector<ConcurrentMap<K, V, H>> remote_maps;
+  constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 };
 
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
   n_keys = 0;
+  set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
+  const int n_procs = Parallel::get_n_procs();
+  remote_maps.resize(n_procs);
 }
+
+
+template< class K, class V, class H>
+void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
+  const int n_procs = Parallel::get_n_procs();
+  
+}
+
 
 template <class K, class V, class H>
 DistMap<K, V, H>::~DistMap() {}
+
+template <class K, class V, class H>
+void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
+  this->max_load_factor = max_load_factor;
+  local_map.set_max_load_factor(max_load_factor);
+  for (auto& remote_map : remote_maps) remote_map.set_max_load_factor(max_load_factor);
+}
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::set(const K&, const V&, const std::function<void(V&, const V&)>&) {
@@ -85,8 +101,9 @@ size_t DistMap<K, V, H>::get_n_keys() {
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::sync() {
-  printf("Shuffling ");
+void DistMap<K, V, H>::sync(const bool verbose) {
+  const int proc_id = Parallel::get_proc_id();
+  if (verbose && proc_id == 0) printf("Syncing: ");
 }
 
 }  // namespace hpmr
