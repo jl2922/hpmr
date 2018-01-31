@@ -12,10 +12,10 @@ class DistRange {
  public:
   DistRange(const T start, const T end, const T step = 1) : start(start), end(end), step(step) {}
 
-  template <class K, class V, class H>
+  template <class K, class V, class H = std::hash<K>>
   DistMap<K, V, H> mapreduce(
       const std::function<void(const T, const std::function<void(const K&, const V&)>&)>& mapper,
-      const std::function<void(T&, const T&)>& reducer,
+      const std::function<void(V&, const V&)>& reducer,
       const bool verbose = false);
 
  private:
@@ -28,7 +28,7 @@ template <class T>
 template <class K, class V, class H>
 DistMap<K, V, H> DistRange<T>::mapreduce(
     const std::function<void(const T, const std::function<void(const K&, const V&)>&)>& mapper,
-    const std::function<void(T&, const T&)>& reducer,
+    const std::function<void(V&, const V&)>& reducer,
     const bool verbose) {
   DistMap<K, V, H> res;
   const int proc_id = Parallel::get_proc_id();
@@ -38,7 +38,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
 
   const auto& emit = [&](const K& key, const V& value) { res.set(key, value, reducer); };
   if (verbose && proc_id == 0) {
-    printf("MapReduce on %d nodes (%d threads): ", n_procs, n_threads * n_procs);
+    printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
   }
 
 #pragma omp parallel for schedule(dynamic, 3)

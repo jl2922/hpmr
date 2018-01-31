@@ -26,19 +26,17 @@ class Parallel {
 
   int n_threads;
 
-  Parallel();
+  Parallel() {
+    MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
+    n_threads = omp_get_max_threads();
+  }
 
   static Parallel get_instance() {
     static Parallel instance;
     return instance;
   }
 };
-
-Parallel::Parallel() {
-  MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-  n_threads = omp_get_max_threads();
-}
 
 template <class T>
 T Parallel::reduce_sum(const T& t) {

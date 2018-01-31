@@ -2,17 +2,12 @@
 #define DIST_MAP_H
 
 #include <functional>
-#include <vector>
 #include "parallel.h"
 #include "reducer.h"
 
-static const size_t N_INITIAL_BUCKETS = 11;
-static const size_t N_SEGMENTS_PER_THREAD = 4;
-static const double DEFAULT_MAX_LOAD_FACTOR = 1.0;
-
 namespace hpmr {
 
-template <class K, class V, class H>
+template <class K, class V, class H = std::hash<K>>
 class DistMap {
  public:
   DistMap();
@@ -23,8 +18,6 @@ class DistMap {
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
   void get(const K& key, const std::function<void(V&)>& handler);
-
-  V get_copy_or_default(const K& key, const V& default_value);
 
   size_t get_n_keys();
 
@@ -39,41 +32,11 @@ class DistMap {
 
  private:
   size_t n_keys;
-
-  size_t n_buckets;
-
-  double max_load_factor;
-
-  size_t n_segments;
-
-  H hasher;
-
-  std::vector<omp_lock_t> segment_locks;
-
-  // For parallel rehashing (Require omp_set_nested(1)).
-  std::vector<omp_lock_t> rehashing_segment_locks;
-
-  struct hash_node {
-    K key;
-    V value;
-    std::unique_ptr<hash_node> next;
-    hash_node(const K& key, const V& value) : key(key), value(value){};
-  };
-
-  std::vector<std::unique_ptr<hash_node>> buckets;
 };
 
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
   n_keys = 0;
-  n_buckets = N_INITIAL_BUCKETS;
-  buckets.resize(n_buckets);
-  max_load_factor = DEFAULT_MAX_LOAD_FACTOR;
-  n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
-  segment_locks.resize(n_segments);
-  rehashing_segment_locks.resize(n_segments);
-  for (auto& lock : segment_locks) omp_init_lock(&lock);
-  for (auto& lock: rehashing_segment_locks) omp_init_lock(&lock);
 }
 
 template <class K, class V, class H>
@@ -88,7 +51,9 @@ size_t DistMap<K, V, H>::get_n_keys() {
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::sync() {}
+void DistMap<K, V, H>::sync() {
+  printf("Shuffling ");
+}
 
 }  // namespace hpmr
 
