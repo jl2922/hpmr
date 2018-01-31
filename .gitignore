@@ -1,0 +1,15 @@
+# Compilation files.
+gtest/
+build/
+*.out
+local.mk
+*.pb.*
+*.capnp.*
+
+# OS and editor files.
+.vscode/
+.DS_Store
+
+# Other temporary files.
+*.log
+*.bak
