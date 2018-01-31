@@ -15,6 +15,9 @@ constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 namespace hpmr {
 
 template <class K, class V, class H = std::hash<K>>
+class DistMap;
+
+template <class K, class V, class H = std::hash<K>>
 class ConcurrentMap {
  public:
   ConcurrentMap();
@@ -49,6 +52,13 @@ class ConcurrentMap {
   bool has(const K& key);
 
   void clear();
+
+  template <class KR, class VR, class HR = std::hash<KR>>
+  DistMap<KR, VR, HR> mapreduce(
+      const std::function<
+          void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>& mapper,
+      const std::function<void(VR&, const VR&)>& reducer,
+      const bool verbose = false);
 
  private:
   size_t n_keys;

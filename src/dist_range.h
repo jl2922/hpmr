@@ -5,6 +5,7 @@
 #include <type_traits>
 #include "dist_map.h"
 #include "parallel.h"
+#include "reducer.h"
 
 namespace hpmr {
 template <class T>

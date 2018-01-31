@@ -12,32 +12,59 @@ class DistMap {
  public:
   DistMap();
 
+  ~DistMap();
+
+  void reserve(const size_t n_buckets_min);
+
+  size_t get_n_buckets();
+
+  double get_load_factor();
+
+  double get_max_load_factor() { return max_load_factor; }
+
+  void set_max_load_factor(const double max_load_factor) {
+    this->max_load_factor = max_load_factor;
+  }
+
+  size_t get_n_keys();
+
   void set(
       const K& key,
       const V& value,
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
-  void get(const K& key, const std::function<void(V&)>& handler);
+  void get(const K& key, const std::function<void(const V&)>& handler);
 
-  size_t get_n_keys();
+  V get(const K& key, const V& default_value = V());
 
-  void sync();
+  void unset(const K& key);
 
-  template <class KR, class VR, class HR>
+  bool has(const K& key);
+
+  void clear();
+
+  template <class KR, class VR, class HR = std::hash<KR>>
   DistMap<KR, VR, HR> mapreduce(
       const std::function<
           void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>& mapper,
       const std::function<void(VR&, const VR&)>& reducer,
       const bool verbose = false);
 
+  void sync();
+
  private:
   size_t n_keys;
+
+  double max_load_factor;
 };
 
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
   n_keys = 0;
 }
+
+template <class K, class V, class H>
+DistMap<K, V, H>::~DistMap() {}
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::set(const K&, const V&, const std::function<void(V&, const V&)>&) {
