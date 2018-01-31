@@ -4,6 +4,7 @@
 #include <functional>
 #include "parallel.h"
 #include "reducer.h"
+#include "concurrent_map.h"
 
 namespace hpmr {
 
@@ -56,6 +57,12 @@ class DistMap {
   size_t n_keys;
 
   double max_load_factor;
+
+  ConcurrentMap<K, V, H> local_map;
+
+  DistMap(const DistMap&) = delete;
+
+  // std::vector<ConcurrentMap<K, V, H>> remote_maps;
 };
 
 template <class K, class V, class H>

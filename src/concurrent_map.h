@@ -14,7 +14,7 @@ constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
 namespace hpmr {
 
-template <class K, class V, class H = std::hash<K>>
+template <class K, class V, class H>
 class DistMap;
 
 template <class K, class V, class H = std::hash<K>>
@@ -119,6 +119,8 @@ class ConcurrentMap {
   void lock_all_segments();
 
   void unlock_all_segments();
+
+  friend class DistMap<K, V, H>;
 };
 
 template <class K, class V, class H>
