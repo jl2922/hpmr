@@ -52,8 +52,6 @@ class DistMap {
   void sync(const bool verbose = false);
 
  private:
-  size_t n_keys;
-
   double max_load_factor;
 
   ConcurrentMap<K, V, H> local_map;
@@ -65,19 +63,23 @@ class DistMap {
 
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
-  n_keys = 0;
   set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
   const int n_procs = Parallel::get_n_procs();
   remote_maps.resize(n_procs);
 }
 
-
-template< class K, class V, class H>
+template <class K, class V, class H>
 void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
   const int n_procs = Parallel::get_n_procs();
-  
+  local_map.reserve(n_buckets_min / n_procs);
+  for (auto& remote_map : remote_maps) remote_map.reserve(n_buckets_min / n_procs / n_procs);
 }
 
+template <class K, class V, class H>
+size_t DistMap<K, V, H>::get_n_buckets() {
+  const size_t local_n_buckets = local_map.get_n_buckets();
+  return Parallel::reduce_sum(local_n_buckets);
+}
 
 template <class K, class V, class H>
 DistMap<K, V, H>::~DistMap() {}
@@ -91,13 +93,14 @@ void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::set(const K&, const V&, const std::function<void(V&, const V&)>&) {
-#pragma omp atomic
-  n_keys++;
+  const size_t hash_value = hasher(key);
+  // TODO: set.
 }
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
-  return Parallel::reduce_sum(n_keys);
+  cosnt size_t local_n_keys = local_map.get_n_keys();
+  return Parallel::reduce_sum(local_n_keys);
 }
 
 template <class K, class V, class H>

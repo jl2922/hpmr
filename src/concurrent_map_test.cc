@@ -15,6 +15,17 @@ TEST(ConcurrentMapTest, Reserve) {
   EXPECT_GE(m.get_n_buckets(), 100);
 }
 
+TEST(ConcurrentMapTest, GetAndSetLoadFactor) {
+  hpmr::ConcurrentMap<int, int> m;
+  constexpr int N_KEYS = 100;
+  m.set_max_load_factor(0.5);
+  EXPECT_EQ(m.get_max_load_factor(), 0.5);
+  for (int i = 0; i < N_KEYS; i++) {
+    m.set(i, i);
+  }
+  EXPECT_GE(m.get_n_buckets(), N_KEYS / 0.5);
+}
+
 TEST(ConcurrentMapTest, InsertAndRehash) {
   hpmr::ConcurrentMap<int, int> m;
   constexpr int N_KEYS = 100;
