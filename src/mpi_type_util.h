@@ -1,5 +1,5 @@
-#ifndef HPMR_MPI_TYPE_UTIL_H
-#define HPMR_MPI_TYPE_UTIL_H
+#pragma once
+
 #include <mpi.h>
 
 namespace hpmr {
@@ -22,5 +22,3 @@ class MpiTypeUtil {
 };
 
 };  // namespace hpmr
-
-#endif

@@ -1,7 +1,6 @@
 #include "concurrent_map.h"
 
 #include <gtest/gtest.h>
-#include <omp.h>
 #include "reducer.h"
 
 TEST(ConcurrentMapTest, Initialization) {

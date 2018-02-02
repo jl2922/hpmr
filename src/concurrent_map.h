@@ -67,6 +67,8 @@ class ConcurrentMap {
 
   size_t n_segments;
 
+  size_t n_procs_cache;
+
   H hasher;
 
   std::vector<omp_lock_t> segment_locks;
@@ -89,18 +91,38 @@ class ConcurrentMap {
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
+  size_t get_hash_value(const K& key) { return hasher(key) / n_procs_cache; }
+
+  // Set using the specified hash value, which shall be consistent with the key.
+  void set(
+      const K& key,
+      const size_t hash_value,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
+  void get(const K& key, const size_t hash_value, const std::function<void(const V&)>& handler);
+
+  V get(const K& key, const size_t hash_value, const V& default_value = V());
+
+  void unset(const K& key, const size_t hash_value);
+
+  bool has(const K& key, const size_t hash_value);
+
   void rehash();
 
   void rehash(const size_t n_rehashing_buckets);
 
   // Get the number of hash buckets to use.
   // This number shall be larger than or equal to the specified number.
-  size_t get_n_rehashing_buckets(const size_t n_buckets) const;
+  size_t get_n_rehashing_buckets(const size_t n_buckets_min) const;
 
   // Apply node_handler to the hash node which has the specific key.
   // If the key does not exist, apply to the unassociated node from the corresponding bucket.
+  // The hash value shall be consistent with the specified key.
   void hash_node_apply(
-      const K& key, const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
+      const K& key,
+      const size_t hash_value,
+      const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
 
   // Apply node_handler to all the hash nodes.
   void hash_node_all_apply(const std::function<void(std::unique_ptr<hash_node>&)>& node_handler);
@@ -132,6 +154,7 @@ ConcurrentMap<K, V, H>::ConcurrentMap() {
   buckets.resize(n_buckets);
   set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
   n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
+  n_procs_cache = static_cast<size_t>(Parallel::get_n_procs());
   segment_locks.resize(n_segments);
   rehashing_segment_locks.resize(n_segments);
   for (auto& lock : segment_locks) omp_init_lock(&lock);
@@ -205,7 +228,7 @@ void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
       rehashing_node->next.reset();
     };
     const K& key = node->key;
-    const size_t hash_value = hasher(key);
+    const size_t hash_value = hasher(key) / n_procs_cache;
     const size_t bucket_id = hash_value % n_rehashing_buckets;
     const size_t segment_id = bucket_id % n_segments;
     auto& lock = rehashing_segment_locks[segment_id];
@@ -224,14 +247,14 @@ void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
 }
 
 template <class K, class V, class H>
-size_t ConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_in) const {
-  // Returns a number that is greater than or equal to n_buckets_in.
-  // That number is either a prime number itself, or a product of two prime numbers.
+size_t ConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_min) const {
+  // Returns a number that is greater than or equal to n_buckets_min.
+  // That number is either a prime number or the product of several prime numbers.
   constexpr size_t PRIMES[] = {
       11, 17, 29, 47, 79, 127, 211, 337, 547, 887, 1433, 2311, 3739, 6053, 9791, 15859};
   constexpr size_t N_PRIMES = sizeof(PRIMES) / sizeof(size_t);
   constexpr size_t LAST_PRIME = PRIMES[N_PRIMES - 1];
-  size_t remaining_factor = n_buckets_in;
+  size_t remaining_factor = n_buckets_min;
   size_t n_rehashing_buckets = 1;
   while (remaining_factor > LAST_PRIME) {
     remaining_factor /= LAST_PRIME;
@@ -256,6 +279,15 @@ size_t ConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_in
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::set(
     const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
+  set(key, get_hash_value(key), value, reducer);
+}
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::set(
+    const K& key,
+    const size_t hash_value,
+    const V& value,
+    const std::function<void(V&, const V&)>& reducer) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (!node) {
       node.reset(new hash_node(key, value));
@@ -265,30 +297,46 @@ void ConcurrentMap<K, V, H>::set(
       reducer(node->value, value);
     }
   };
-  hash_node_apply(key, node_handler);
+  hash_node_apply(key, hash_value, node_handler);
   if (n_keys >= n_buckets * max_load_factor) rehash();
 }
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::get(const K& key, const std::function<void(const V&)>& handler) {
+  get(key, get_hash_value(key), handler);
+}
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::get(
+    const K& key, const size_t hash_value, const std::function<void(const V&)>& handler) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (node) handler(node->value);
   };
-  hash_node_apply(key, node_handler);
+  hash_node_apply(key, hash_value, node_handler);
 }
 
 template <class K, class V, class H>
 V ConcurrentMap<K, V, H>::get(const K& key, const V& default_value) {
+  return get(key, get_hash_value(key), default_value);
+}
+
+template <class K, class V, class H>
+V ConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
   V value(default_value);
   const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
     if (node) value = node->value;
   };
-  hash_node_apply(key, node_handler);
+  hash_node_apply(key, hash_value, node_handler);
   return value;
 }
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::unset(const K& key) {
+  unset(key, get_hash_value(key));
+}
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::unset(const K& key, const size_t hash_value) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (node) {
       node = std::move(node->next);
@@ -296,16 +344,21 @@ void ConcurrentMap<K, V, H>::unset(const K& key) {
       n_keys--;
     }
   };
-  hash_node_apply(key, node_handler);
+  hash_node_apply(key, hash_value, node_handler);
 }
 
 template <class K, class V, class H>
 bool ConcurrentMap<K, V, H>::has(const K& key) {
+  return has(key, get_hash_value(key));
+}
+
+template <class K, class V, class H>
+bool ConcurrentMap<K, V, H>::has(const K& key, const size_t hash_value) {
   bool has_key = false;
   const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
     if (node) has_key = true;
   };
-  hash_node_apply(key, node_handler);
+  hash_node_apply(key, hash_value, node_handler);
   return has_key;
 }
 
@@ -322,8 +375,9 @@ void ConcurrentMap<K, V, H>::clear() {
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::hash_node_apply(
-    const K& key, const std::function<void(std::unique_ptr<hash_node>&)>& node_handler) {
-  const size_t hash_value = hasher(key);
+    const K& key,
+    const size_t hash_value,
+    const std::function<void(std::unique_ptr<hash_node>&)>& node_handler) {
   bool applied = false;
   while (!applied) {
     const size_t n_buckets_snapshot = n_buckets;

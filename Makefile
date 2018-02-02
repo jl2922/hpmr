@@ -15,7 +15,7 @@ endif
 
 # Sources and intermediate objects.
 TESTS := $(shell find $(SRC_DIR) -name "*_test.cc")
-HEADERS := $(shell find $(SRC_DIR) -name "*.h")
+HEADERS := $(shell find $(SRC_DIR) -name "*.h" -or -name "*.inl")
 TEST_OBJS := $(TESTS:$(SRC_DIR)/%.cc=$(BUILD_DIR)/%.o)
 GTEST_DIR := gtest/googletest
 GMOCK_DIR := gtest/googlemock
