@@ -1,5 +1,4 @@
-#ifndef HPMR_CONCURRENT_MAP_H
-#define HPMR_CONCURRENT_MAP_H
+#pragma once
 
 #include <omp.h>
 #include <functional>
@@ -51,6 +50,8 @@ class ConcurrentMap {
 
   void clear();
 
+  void clear_and_shrink();
+
   template <class KR, class VR, class HR = std::hash<KR>>
   DistMap<KR, VR, HR> mapreduce(
       const std::function<
@@ -93,20 +94,21 @@ class ConcurrentMap {
 
   size_t get_hash_value(const K& key) { return hasher(key) / n_procs_cache; }
 
-  // Set using the specified hash value, which shall be consistent with the key.
-  void set(
+  // Set with the specified hash value, which shall be consistent with the key.
+  void set_with_hash(
       const K& key,
       const size_t hash_value,
       const V& value,
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
-  void get(const K& key, const size_t hash_value, const std::function<void(const V&)>& handler);
+  void get_with_hash(
+      const K& key, const size_t hash_value, const std::function<void(const V&)>& handler);
 
-  V get(const K& key, const size_t hash_value, const V& default_value = V());
+  V get_with_hash(const K& key, const size_t hash_value, const V& default_value = V());
 
-  void unset(const K& key, const size_t hash_value);
+  void unset_with_hash(const K& key, const size_t hash_value);
 
-  bool has(const K& key, const size_t hash_value);
+  bool has_with_hash(const K& key, const size_t hash_value);
 
   void rehash();
 
@@ -201,7 +203,8 @@ void ConcurrentMap<K, V, H>::reserve(const size_t n_buckets_min) {
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::rehash() {
-  reserve(n_keys / max_load_factor);
+  const size_t n_buckets_min = static_cast<size_t>(n_keys / max_load_factor);
+  reserve(n_buckets_min);
 }
 
 template <class K, class V, class H>
@@ -212,9 +215,10 @@ void ConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
     omp_unset_lock(&first_lock);
     return;
   }
-
   omp_unset_lock(&first_lock);
+
   lock_all_segments();
+
   if (n_buckets >= n_rehashing_buckets) {
     unlock_all_segments();
     return;
@@ -279,11 +283,11 @@ size_t ConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_mi
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::set(
     const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
-  set(key, get_hash_value(key), value, reducer);
+  set_with_hash(key, get_hash_value(key), value, reducer);
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::set(
+void ConcurrentMap<K, V, H>::set_with_hash(
     const K& key,
     const size_t hash_value,
     const V& value,
@@ -303,11 +307,11 @@ void ConcurrentMap<K, V, H>::set(
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::get(const K& key, const std::function<void(const V&)>& handler) {
-  get(key, get_hash_value(key), handler);
+  get_with_hash(key, get_hash_value(key), handler);
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::get(
+void ConcurrentMap<K, V, H>::get_with_hash(
     const K& key, const size_t hash_value, const std::function<void(const V&)>& handler) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (node) handler(node->value);
@@ -317,11 +321,12 @@ void ConcurrentMap<K, V, H>::get(
 
 template <class K, class V, class H>
 V ConcurrentMap<K, V, H>::get(const K& key, const V& default_value) {
-  return get(key, get_hash_value(key), default_value);
+  return get_with_hash(key, get_hash_value(key), default_value);
 }
 
 template <class K, class V, class H>
-V ConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
+V ConcurrentMap<K, V, H>::get_with_hash(
+    const K& key, const size_t hash_value, const V& default_value) {
   V value(default_value);
   const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
     if (node) value = node->value;
@@ -332,11 +337,11 @@ V ConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& de
 
 template <class K, class V, class H>
 void ConcurrentMap<K, V, H>::unset(const K& key) {
-  unset(key, get_hash_value(key));
+  unset_with_hash(key, get_hash_value(key));
 }
 
 template <class K, class V, class H>
-void ConcurrentMap<K, V, H>::unset(const K& key, const size_t hash_value) {
+void ConcurrentMap<K, V, H>::unset_with_hash(const K& key, const size_t hash_value) {
   const auto& node_handler = [&](std::unique_ptr<hash_node>& node) {
     if (node) {
       node = std::move(node->next);
@@ -349,11 +354,11 @@ void ConcurrentMap<K, V, H>::unset(const K& key, const size_t hash_value) {
 
 template <class K, class V, class H>
 bool ConcurrentMap<K, V, H>::has(const K& key) {
-  return has(key, get_hash_value(key));
+  return has_with_hash(key, get_hash_value(key));
 }
 
 template <class K, class V, class H>
-bool ConcurrentMap<K, V, H>::has(const K& key, const size_t hash_value) {
+bool ConcurrentMap<K, V, H>::has_with_hash(const K& key, const size_t hash_value) {
   bool has_key = false;
   const auto& node_handler = [&](const std::unique_ptr<hash_node>& node) {
     if (node) has_key = true;
@@ -370,6 +375,19 @@ void ConcurrentMap<K, V, H>::clear() {
     buckets[i].reset();
   }
   n_keys = 0;
+  unlock_all_segments();
+}
+
+template <class K, class V, class H>
+void ConcurrentMap<K, V, H>::clear_and_shrink() {
+  lock_all_segments();
+#pragma omp parallel for
+  for (size_t i = 0; i < n_buckets; i++) {
+    buckets[i].reset();
+  }
+  n_keys = 0;
+  n_buckets = N_INITIAL_BUCKETS;
+  buckets.resize(n_buckets);
   unlock_all_segments();
 }
 
@@ -444,5 +462,3 @@ void ConcurrentMap<K, V, H>::unlock_all_segments() {
 }
 
 }  // namespace hpmr
-
-#endif

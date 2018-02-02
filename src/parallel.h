@@ -19,6 +19,9 @@ class Parallel {
   template <class T>
   static T reduce_sum(const T& t);
 
+  template <class T>
+  static T broadcast(const T& t, const bool is_source);
+
  private:
   int proc_id;
 
@@ -43,6 +46,11 @@ T Parallel::reduce_sum(const T& t) {
   T res;
   MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
   return res;
+}
+
+template <class T>
+static void broadcast(T& t, const int src_proc_id) {
+  MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
 }
 
 }  // namespace hpmr
