@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include "concurrent_map.h"
+#include "bare_concurrent_map.h"
 #include "parallel.h"
 #include "reducer.h"
 
@@ -42,6 +42,7 @@ class DistMap {
       const std::function<void(VR&, const VR&)>& reducer,
       const bool verbose = false);
 
+  // Shuffle and reduce.
   void sync(const bool verbose = false);
 
  private:
@@ -53,9 +54,9 @@ class DistMap {
 
   H hasher;
 
-  ConcurrentMap<K, V, H> local_map;
+  BareConcurrentMap<K, V, H> local_map;
 
-  std::vector<ConcurrentMap<K, V, H>> remote_maps;
+  std::vector<BareConcurrentMap<K, V, H>> remote_maps;
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 };
@@ -109,9 +110,9 @@ void DistMap<K, V, H>::set(
   const size_t target_proc_id = hash_value % n_procs_cache;
   const size_t map_hash_value = hash_value / n_procs_cache;
   if (target_proc_id == proc_id_cache) {
-    local_map.set_with_hash(key, map_hash_value, value, reducer);
+    local_map.set(key, map_hash_value, value, reducer);
   } else {
-    remote_maps[target_proc_id].set_with_hash(key, map_hash_value, value, reducer);
+    remote_maps[target_proc_id].set(key, map_hash_value, value, reducer);
   }
 }
 
@@ -122,7 +123,7 @@ V DistMap<K, V, H>::get(const K& key, const V& default_value) {
   const size_t target_proc_id = hash_value % n_procs_cache;
   V res;
   if (target_proc_id == proc_id_cache) {
-    res = local_map.get(key, default_value);
+    res = local_map.get(key, hash_value, default_value);
   }
   Parallel::broadcast(res, target_proc_id);
   return res;

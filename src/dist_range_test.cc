@@ -2,7 +2,6 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "concurrent_map_impl.h"
 #include "reducer.h"
 
 TEST(DistRangeTest, MapReduceTest) {
