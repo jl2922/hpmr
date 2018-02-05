@@ -78,6 +78,7 @@ void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_buckets() {
+  sync();
   const size_t local_n_buckets = local_map.get_n_buckets();
   return Parallel::reduce_sum(local_n_buckets);
 }
@@ -96,6 +97,7 @@ void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
+  sync();
   const size_t local_n_keys = local_map.get_n_keys();
   return Parallel::reduce_sum(local_n_keys);
 }
@@ -115,7 +117,15 @@ void DistMap<K, V, H>::set(
 
 template <class K, class V, class H>
 V DistMap<K, V, H>::get(const K& key, const V& default_value) {
-  
+  sync();
+  const size_t hash_value = hasher(key);
+  const size_t target_proc_id = hash_value % n_procs_cache;
+  V res;
+  if (target_proc_id == proc_id_cache) {
+    res = local_map.get(key, default_value);
+  }
+  Parallel::broadcast(res, target_proc_id);
+  return res;
 }
 
 template <class K, class V, class H>
@@ -136,12 +146,16 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
     const std::function<void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>&
         mapper,
     const std::function<void(VR&, const VR&)>& reducer,
-    const bool verbose) {}
+    const bool verbose) {
+  sync();
+  DistMap<KR, VR, HR> res = local_map.mapreduce(mapper, reducer, verbose);
+  res.sync();
+  return res;
+}
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::sync(const bool verbose) {
-  const int proc_id = Parallel::get_proc_id();
-  if (verbose && proc_id == 0) printf("Syncing: ");
+  if (verbose && proc_id_cache == 0) printf("Syncing: ");
 }
 
 }  // namespace hpmr

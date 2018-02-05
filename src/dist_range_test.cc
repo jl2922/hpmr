@@ -2,12 +2,13 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "concurrent_map_impl.h"
 #include "reducer.h"
 
 TEST(DistRangeTest, MapReduceTest) {
   const int N_KEYS = 1000;
   hpmr::DistRange<int> range(0, N_KEYS);
-  auto mapper = [](const int id, const std::function<void(const int, const bool)>& emit) {
+  const auto& mapper = [](const int id, const std::function<void(const int, const bool)>& emit) {
     EXPECT_THAT(id, testing::Ge(0));
     EXPECT_THAT(id, testing::Lt(N_KEYS));
     emit(id, false);

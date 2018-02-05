@@ -1,4 +1,4 @@
-#include "concurrent_map.h"
+#include "concurrent_map_impl.h"
 
 #include <gtest/gtest.h>
 #include "reducer.h"
@@ -23,16 +23,6 @@ TEST(ConcurrentMapTest, GetAndSetLoadFactor) {
     m.set(i, i);
   }
   EXPECT_GE(m.get_n_buckets(), N_KEYS / 0.5);
-}
-
-TEST(ConcurrentMapTest, InsertAndRehash) {
-  hpmr::ConcurrentMap<int, int> m;
-  constexpr int N_KEYS = 100;
-  for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
-  }
-  EXPECT_EQ(m.get_n_keys(), N_KEYS);
-  EXPECT_GE(m.get_n_buckets(), N_KEYS);
 }
 
 TEST(ConcurrentMapTest, ParallelInsertAndRehash) {
@@ -106,4 +96,17 @@ TEST(ConcurrentMapTest, Clear) {
   EXPECT_FALSE(m.has("aa"));
   EXPECT_FALSE(m.has("bbb"));
   EXPECT_EQ(m.get_n_keys(), 0);
+}
+
+TEST(ConcurrentMapTest, MapReduce) {
+  hpmr::ConcurrentMap<std::string, int> m;
+  m.set("aa", 1);
+  m.set("bbb", 2);
+  const auto& mapper = [](const std::string&,
+                          const int value,
+                          const std::function<void(const int, const int)>& emit) {
+    emit(0, value);
+  };
+  m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
+  // EXPECT_EQ(m.get(0), 3);
 }

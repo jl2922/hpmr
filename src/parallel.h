@@ -20,7 +20,13 @@ class Parallel {
   static T reduce_sum(const T& t);
 
   template <class T>
-  static T broadcast(const T& t, const bool is_source);
+  static T reduce_max(const T& t);
+
+  template <class T>
+  static T reduce_min(const T& t);
+
+  template <class T>
+  static void broadcast(T& t, const int src_proc_id);
 
  private:
   int proc_id;
@@ -49,7 +55,21 @@ T Parallel::reduce_sum(const T& t) {
 }
 
 template <class T>
-static void broadcast(T& t, const int src_proc_id) {
+T Parallel::reduce_max(const T& t) {
+  T res;
+  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_MAX, MPI_COMM_WORLD);
+  return res;
+}
+
+template <class T>
+T Parallel::reduce_min(const T& t) {
+  T res;
+  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
+  return res;
+}
+
+template <class T>
+void Parallel::broadcast(T& t, const int src_proc_id) {
   MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
 }
 
