@@ -28,15 +28,5 @@ fi
 export PATH=$TOOLS_DIR/openmpi/bin:$PATH
 export LD_LIBRARY_PATH=$TOOLS_DIR/openmpi/lib:$LD_LIBRARY_PATH
 
-# Download Google Test.
-echo "Downloading Google Test"
-wget -O release-1.8.0.tar.gz https://github.com/google/googletest/archive/release-1.8.0.tar.gz
-tar xzf release-1.8.0.tar.gz
-rm release-1.8.0.tar.gz
-mv googletest-release-1.8.0 gtest
-echo "Completed"
-echo
-
-cp ci.mk local.mk
-make test
-make test_all
+make -j
+make test_mpi

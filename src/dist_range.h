@@ -1,11 +1,8 @@
-#ifndef DIST_RANGE_H
-#define DIST_RANGE_H
+#pragma once
 
 #include <functional>
-#include <type_traits>
 #include "dist_map.h"
 #include "parallel.h"
-#include "reducer.h"
 
 namespace hpmr {
 template <class T>
@@ -37,7 +34,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
   const int n_threads = Parallel::get_n_threads();
   double target_progress = 0.1;
 
-  const auto& emit = [&](const K& key, const V& value) { res.set(key, value, reducer); };
+  const auto& emit = [&](const K& key, const V& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
     printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
   }
@@ -46,21 +43,19 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
   for (T i = start + proc_id * step; i < end; i += step * n_procs) {
     mapper(i, emit);
     const int thread_id = Parallel::get_thread_id();
-    if (verbose && thread_id == 0) {
+    if (verbose && proc_id == 0 && thread_id == 0) {
       const double current_progress = (i - start) * 100.0 / (end - start);
       while (target_progress <= current_progress) {
-        if (proc_id == 0) printf("%.1f%% ", target_progress);
+        printf("%.1f%% ", target_progress);
         target_progress *= 2;
       }
     }
   }
+  res.sync(verbose);
 
-  res.sync();
   if (verbose && proc_id == 0) printf("Done\n");
 
   return res;
 }
 
 }  // namespace hpmr
-
-#endif

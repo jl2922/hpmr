@@ -15,10 +15,10 @@ endif
 
 # Sources and intermediate objects.
 TESTS := $(shell find $(SRC_DIR) -name "*_test.cc")
-HEADERS := $(shell find $(SRC_DIR) -name "*.h")
+HEADERS := $(shell find $(SRC_DIR) -name "*.h" -or -name "*.inl")
 TEST_OBJS := $(TESTS:$(SRC_DIR)/%.cc=$(BUILD_DIR)/%.o)
-GTEST_DIR := gtest/googletest
-GMOCK_DIR := gtest/googlemock
+GTEST_DIR := googletest/googletest
+GMOCK_DIR := googletest/googlemock
 GTEST_ALL_SRC := ${GTEST_DIR}/src/gtest-all.cc
 GMOCK_ALL_SRC := ${GMOCK_DIR}/src/gmock-all.cc
 TEST_MAIN_SRC := gtest_main_mpi.cc
@@ -33,12 +33,9 @@ TEST_LIB := $(BUILD_DIR)/libgtest.a
 all: test
 
 test: $(TEST_EXE)
-	./$(TEST_EXE) --gtest_filter=-*LargeTest.*
+	./$(TEST_EXE)
 
 test_mpi: $(TEST_EXE)
-	mpirun -n 2 ./$(TEST_EXE) --gtest_filter=-*LargeTest.*
-
-test_all: $(TEST_EXE)
 	mpirun -n 2 ./$(TEST_EXE)
 
 clean:
