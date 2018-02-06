@@ -52,6 +52,8 @@ class BareConcurrentMap {
 
   void clear_and_shrink();
 
+  size_t get_hash_value(const K& key);
+
   // Apply node_handler to the hash node which has the specific key.
   // If the key does not exist, apply to the unassociated node from the corresponding bucket.
   // The hash value shall be consistent with the specified key.
@@ -86,8 +88,6 @@ class BareConcurrentMap {
   constexpr static size_t N_SEGMENTS_PER_THREAD = 7;
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
-
-  size_t get_hash_value(const K& key);
 
   void rehash();
 
