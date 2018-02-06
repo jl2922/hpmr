@@ -58,18 +58,6 @@ TEST(ConcurrentMapTest, SetAndGet) {
   m2.get("cc", [](const int value) { EXPECT_EQ(value, 3); });
 }
 
-TEST(ConcurrentMapTest, CopyConstructor) {
-  hpmr::ConcurrentMap<std::string, int> m;
-  m.set("aa", 0);
-  EXPECT_EQ(m.get("aa"), 0);
-  m.set("bb", 1);
-  EXPECT_EQ(m.get("bb"), 1);
-
-  hpmr::ConcurrentMap<std::string, int> m2(m);
-  EXPECT_EQ(m2.get("aa"), 0);
-  EXPECT_EQ(m2.get("bb"), 0);
-}
-
 TEST(ConcurrentMapTest, Unset) {
   hpmr::ConcurrentMap<std::string, int> m;
   m.set("aa", 1);
