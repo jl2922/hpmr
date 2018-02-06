@@ -52,13 +52,13 @@ class DistMap {
 
   size_t proc_id_cache;
 
-  H hasher;
-
   BareConcurrentMap<K, V, H> local_map;
 
   std::vector<BareConcurrentMap<K, V, H>> remote_maps;
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
+
+  size_t get_hash_value(const K& key) { return local_map.get_hash_value(key); }
 };
 
 template <class K, class V, class H>
@@ -106,26 +106,26 @@ size_t DistMap<K, V, H>::get_n_keys() {
 template <class K, class V, class H>
 void DistMap<K, V, H>::async_set(
     const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
-  const size_t hash_value = hasher(key);
-  const size_t target_proc_id = hash_value % n_procs_cache;
+  const size_t hash_value = get_hash_value(key);
+  const size_t dest_proc_id = hash_value % n_procs_cache;
   const size_t map_hash_value = hash_value / n_procs_cache;
-  if (target_proc_id == proc_id_cache) {
+  if (dest_proc_id == proc_id_cache) {
     local_map.set(key, map_hash_value, value, reducer);
   } else {
-    remote_maps[target_proc_id].set(key, map_hash_value, value, reducer);
+    remote_maps[dest_proc_id].set(key, map_hash_value, value, reducer);
   }
 }
 
 template <class K, class V, class H>
 V DistMap<K, V, H>::get(const K& key, const V& default_value) {
   sync();
-  const size_t hash_value = hasher(key);
-  const size_t target_proc_id = hash_value % n_procs_cache;
+  const size_t hash_value = get_hash_value(key);
+  const size_t dest_proc_id = hash_value % n_procs_cache;
   V res;
-  if (target_proc_id == proc_id_cache) {
+  if (dest_proc_id == proc_id_cache) {
     res = local_map.get(key, hash_value, default_value);
   }
-  Parallel::broadcast(res, target_proc_id);
+  Parallel::broadcast(res, dest_proc_id);
   return res;
 }
 
@@ -156,7 +156,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
 
   const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
-    printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
+    printf("MapReduce on %d node(s) (%d threads):\nMapping: ", n_procs, n_threads * n_procs);
   }
 
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
@@ -170,18 +170,36 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
     }
   };
   local_map.all_node_apply(node_handler);
+  if (verbose && proc_id == 0) printf("Done\n");
 
   res.sync(verbose);
-
-  if (verbose && proc_id == 0) printf("Done\n");
 
   return res;
 }
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::sync(const bool verbose) {
-  if (verbose && proc_id_cache == 0) printf("Syncing: ");
-  // TODO: sync across nodes.
+  const int proc_id = Parallel::get_proc_id();
+  const int n_procs = Parallel::get_n_procs();
+  const int n_threads = Parallel::get_n_threads();
+
+  if (verbose && proc_id == 0) printf("Syncing: ");
+
+  std::string recv_buf;
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
+    local_map.set(node->key, local_map.get_hash_value(node->key), node->value);
+  };
+  for (int i = 1; i < n_procs; i++) {
+    const int dest_proc_id = (proc_id + i) % n_procs;
+    const int src_proc_id = (proc_id - i) % n_procs;
+    // const std::string send_buf = hps::serialize_to_string(remote_maps[dest_proc_id]);
+    // remote_maps[dest_proc_id].clear();
+    // Parallel::circular_shift(send_buf.data(), send_buf.size(), recv_buf, i);
+    // hps::parse_from_string(remote_maps[dest_proc_id], recv_buf);
+    // remote_maps[dest_proc_id].all_node_apply(node_handler);
+    if (verbose && proc_id == 0) printf("%d/%d ", i, n_procs);
+  }
+  if (verbose && proc_id == 0) printf("Done\n");
 }
 
 }  // namespace hpmr

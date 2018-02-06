@@ -1,5 +1,4 @@
 # Compilation files.
-gtest/
 build/
 *.out
 local.mk

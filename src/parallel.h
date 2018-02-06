@@ -27,12 +27,21 @@ class Parallel {
   template <class T>
   static void broadcast(T& t, const int src_proc_id);
 
+  template <class T>
+  static void circular_shift(
+      const T* data,
+      const size_t count,
+      const int n_shifts,
+      const size_t trunk_size = DEFAULT_TRUNK_SIZE);
+
  private:
   int proc_id;
 
   int n_procs;
 
   int n_threads;
+
+  constexpr static size_t DEFAULT_TRUNK_SIZE = 1 << 25;
 
   Parallel() {
     MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
