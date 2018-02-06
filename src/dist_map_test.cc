@@ -91,3 +91,31 @@ TEST(DistMapTest, ClearAndShrink) {
   EXPECT_EQ(m.get_n_keys(), 0);
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
 }
+
+TEST(DistMapTest, MapReduce) {
+  hpmr::DistMap<std::string, int> m;
+  m.async_set("aa", 1);
+  m.async_set("bbb", 2);
+  const auto& mapper = [](const std::string&,
+                          const int value,
+                          const std::function<void(const int, const int)>& emit) {
+    emit(0, value);
+  };
+  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
+  EXPECT_EQ(res.get(0), 3);
+}
+
+TEST(DistMapTest, ParallelMapReduce) {
+  hpmr::DistMap<int, int> m;
+  constexpr int N_KEYS = 1000;
+#pragma omp parallel for
+  for (int i = 0; i < N_KEYS; i++) {
+    m.async_set(i, i);
+  }
+  const auto& mapper =
+      [](const int, const int value, const std::function<void(const int, const int)>& emit) {
+        emit(0, value);
+      };
+  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
+  EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
+}

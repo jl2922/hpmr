@@ -123,3 +123,18 @@ TEST(ConcurrentMapTest, MapReduce) {
   auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
   EXPECT_EQ(res.get(0), 3);
 }
+
+TEST(ConcurrentMapTest, ParallelMapReduce) {
+  hpmr::ConcurrentMap<int, int> m;
+  constexpr int N_KEYS = 1000;
+#pragma omp parallel for
+  for (int i = 0; i < N_KEYS; i++) {
+    m.set(i, i);
+  }
+  const auto& mapper =
+      [](const int, const int value, const std::function<void(const int, const int)>& emit) {
+        emit(0, value);
+      };
+  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
+  EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
+}
