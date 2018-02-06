@@ -22,6 +22,8 @@ TEST(DistMapTest, LargeReserve) {
   EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
 }
 
+// TODO: Distributed cases.
+
 // TEST(DistMapTest, GetAndSetLoadFactor) {
 //   hpmr::DistMap<int, int> m;
 //   constexpr int N_KEYS = 100;
