@@ -1,5 +1,4 @@
-#ifndef HPMR_PARALLEL_H
-#define HPMR_PARALLEL_H
+#pragma once
 
 #include <mpi.h>
 #include <omp.h>
@@ -74,5 +73,3 @@ void Parallel::broadcast(T& t, const int src_proc_id) {
 }
 
 }  // namespace hpmr
-
-#endif

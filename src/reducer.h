@@ -1,5 +1,5 @@
-#ifndef HPMR_REDUCER_H
-#define HPMR_REDUCER_H
+#pragma once
+
 #include <functional>
 
 namespace hpmr {
@@ -23,5 +23,3 @@ class Reducer {
 };
 
 }  // namespace hpmr
-
-#endif

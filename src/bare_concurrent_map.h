@@ -10,7 +10,8 @@
 
 namespace hpmr {
 
-// A bare concurrent hash map to serve as the fundation of other classes.
+// A concurrent hash map to serve as the fundation of other classes.
+// When updating the map, hash value needs to be provided and shall be consistent with the key.
 template <class K, class V, class H = std::hash<K>>
 class BareConcurrentMap {
  public:

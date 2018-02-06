@@ -1,3 +1,5 @@
+#pragma once
+
 #include <memory>
 
 template <class K, class V>
