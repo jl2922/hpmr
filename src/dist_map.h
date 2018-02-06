@@ -24,7 +24,7 @@ class DistMap {
 
   size_t get_n_keys();
 
-  void set(
+  void async_set(
       const K& key,
       const V& value,
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
@@ -104,7 +104,7 @@ size_t DistMap<K, V, H>::get_n_keys() {
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::set(
+void DistMap<K, V, H>::async_set(
     const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
   const size_t hash_value = hasher(key);
   const size_t target_proc_id = hash_value % n_procs_cache;
@@ -149,7 +149,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
     const std::function<void(VR&, const VR&)>& reducer,
     const bool verbose) {
   sync();
-  DistMap<KR, VR, HR> res = local_map.mapreduce(mapper, reducer, verbose);
+  DistMap<KR, VR, HR> res;
   res.sync();
   return res;
 }
@@ -157,6 +157,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
 template <class K, class V, class H>
 void DistMap<K, V, H>::sync(const bool verbose) {
   if (verbose && proc_id_cache == 0) printf("Syncing: ");
+  // TODO: sync across nodes.
 }
 
 }  // namespace hpmr

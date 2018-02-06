@@ -63,7 +63,8 @@ class BareConcurrentMap {
       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
 
   // Apply node_handler to all the hash nodes.
-  void all_node_apply(const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
+  void all_node_apply(
+      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler);
 
  private:
   size_t n_keys;
@@ -108,7 +109,8 @@ class BareConcurrentMap {
   // Recursively apply the handler to each node on the list from the node specified (post-order).
   void all_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
-      const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
+      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
+      const double progress = 0.0);
 
   void lock_all_segments();
 
@@ -275,11 +277,12 @@ void BareConcurrentMap<K, V, H>::key_node_apply(
 
 template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::all_node_apply(
-    const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler) {
+    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler) {
   lock_all_segments();
-#pragma omp parallel for
+  const double progress_factor = 100.0 / n_buckets;
+#pragma omp parallel for schedule(static, 1)
   for (size_t i = 0; i < n_buckets; i++) {
-    all_node_apply_recursive(buckets[i], node_handler);
+    all_node_apply_recursive(buckets[i], node_handler, i * progress_factor);
   }
   unlock_all_segments();
 }
@@ -303,11 +306,12 @@ void BareConcurrentMap<K, V, H>::key_node_apply_recursive(
 template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::all_node_apply_recursive(
     std::unique_ptr<HashNode<K, V>>& node,
-    const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler) {
+    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
+    const double progress) {
   if (node) {
     // Post-order traversal for rehashing.
-    all_node_apply_recursive(node->next, node_handler);
-    node_handler(node);
+    all_node_apply_recursive(node->next, node_handler, progress);
+    node_handler(node, progress);
   }
 }
 
@@ -344,7 +348,7 @@ void BareConcurrentMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
 
   // Rehash.
   std::vector<std::unique_ptr<HashNode<K, V>>> rehashing_buckets(n_rehashing_buckets);
-  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
     const auto& rehashing_node_handler = [&](std::unique_ptr<HashNode<K, V>>& rehashing_node) {
       rehashing_node = std::move(node);
       rehashing_node->next.reset();

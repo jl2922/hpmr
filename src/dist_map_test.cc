@@ -10,9 +10,9 @@ TEST(DistMapTest, Initialization) {
 
 TEST(DistMapTest, CopyConstructor) {
   hpmr::DistMap<std::string, int> m;
-  m.set("aa", 0);
+  m.async_set("aa", 0);
   EXPECT_EQ(m.get("aa"), 0);
-  m.set("bb", 1);
+  m.async_set("bb", 1);
   EXPECT_EQ(m.get("bb"), 1);
 
   hpmr::DistMap<std::string, int> m2(m);
@@ -40,22 +40,22 @@ TEST(DistMapTest, GetAndSetLoadFactor) {
   m.set_max_load_factor(0.5);
   EXPECT_EQ(m.get_max_load_factor(), 0.5);
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
+    m.async_set(i, i);
   }
   EXPECT_GE(m.get_n_buckets(), N_KEYS / 0.5);
 }
 
 TEST(DistMapTest, SetAndGet) {
   hpmr::DistMap<std::string, int> m;
-  m.set("aa", 0);
+  m.async_set("aa", 0);
   EXPECT_EQ(m.get("aa"), 0);
-  m.set("aa", 1);
+  m.async_set("aa", 1);
   EXPECT_EQ(m.get("aa", 0), 1);
-  m.set("aa", 2, hpmr::Reducer<int>::sum);
+  m.async_set("aa", 2, hpmr::Reducer<int>::sum);
   EXPECT_EQ(m.get("aa"), 3);
 
   hpmr::DistMap<std::string, int> m2;
-  m2.set("cc", 3, hpmr::Reducer<int>::sum);
+  m2.async_set("cc", 3, hpmr::Reducer<int>::sum);
   EXPECT_EQ(m2.get("cc"), 3);
 }
 
@@ -64,7 +64,7 @@ TEST(DistMapTest, ParallelSetAndRehash) {
   constexpr int N_KEYS = 100;
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
+    m.async_set(i, i);
   }
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS);
@@ -72,8 +72,8 @@ TEST(DistMapTest, ParallelSetAndRehash) {
 
 TEST(DistMapTest, Clear) {
   hpmr::DistMap<std::string, int> m;
-  m.set("aa", 1);
-  m.set("bbb", 2);
+  m.async_set("aa", 1);
+  m.async_set("bbb", 2);
   EXPECT_EQ(m.get_n_keys(), 2);
   m.clear();
   EXPECT_EQ(m.get_n_keys(), 0);
@@ -83,7 +83,7 @@ TEST(DistMapTest, ClearAndShrink) {
   hpmr::DistMap<int, int> m;
   constexpr int N_KEYS = 100;
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
+    m.async_set(i, i);
   }
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());

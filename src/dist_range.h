@@ -34,7 +34,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
   const int n_threads = Parallel::get_n_threads();
   double target_progress = 0.1;
 
-  const auto& emit = [&](const K& key, const V& value) { res.set(key, value, reducer); };
+  const auto& emit = [&](const K& key, const V& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
     printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
   }

@@ -111,15 +111,15 @@ TEST(ConcurrentMapTest, ClearAndShrink) {
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
 }
 
-// TEST(ConcurrentMapTest, MapReduce) {
-//   hpmr::ConcurrentMap<std::string, int> m;
-//   m.set("aa", 1);
-//   m.set("bbb", 2);
-//   const auto& mapper = [](const std::string&,
-//                           const int value,
-//                           const std::function<void(const int, const int)>& emit) {
-//     emit(0, value);
-//   };
-//   m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
-//   // EXPECT_EQ(m.get(0), 3);
-// }
+TEST(ConcurrentMapTest, MapReduce) {
+  hpmr::ConcurrentMap<std::string, int> m;
+  m.set("aa", 1);
+  m.set("bbb", 2);
+  const auto& mapper = [](const std::string&,
+                          const int value,
+                          const std::function<void(const int, const int)>& emit) {
+    emit(0, value);
+  };
+  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
+  EXPECT_EQ(res.get(0), 3);
+}

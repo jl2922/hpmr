@@ -17,8 +17,8 @@ endif
 TESTS := $(shell find $(SRC_DIR) -name "*_test.cc")
 HEADERS := $(shell find $(SRC_DIR) -name "*.h" -or -name "*.inl")
 TEST_OBJS := $(TESTS:$(SRC_DIR)/%.cc=$(BUILD_DIR)/%.o)
-GTEST_DIR := gtest/googletest
-GMOCK_DIR := gtest/googlemock
+GTEST_DIR := googletest/googletest
+GMOCK_DIR := googletest/googlemock
 GTEST_ALL_SRC := ${GTEST_DIR}/src/gtest-all.cc
 GMOCK_ALL_SRC := ${GMOCK_DIR}/src/gmock-all.cc
 TEST_MAIN_SRC := gtest_main_mpi.cc
