@@ -28,5 +28,5 @@ fi
 export PATH=$TOOLS_DIR/openmpi/bin:$PATH
 export LD_LIBRARY_PATH=$TOOLS_DIR/openmpi/lib:$LD_LIBRARY_PATH
 
-make test
-make test_all
+make -j
+make test_mpi

@@ -33,12 +33,9 @@ TEST_LIB := $(BUILD_DIR)/libgtest.a
 all: test
 
 test: $(TEST_EXE)
-	./$(TEST_EXE) --gtest_filter=-*LargeTest.*
+	./$(TEST_EXE)
 
 test_mpi: $(TEST_EXE)
-	mpirun -n 2 ./$(TEST_EXE) --gtest_filter=-*LargeTest.*
-
-test_all: $(TEST_EXE)
 	mpirun -n 2 ./$(TEST_EXE)
 
 clean:
