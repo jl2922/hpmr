@@ -2,6 +2,7 @@
 
 #include <mpi.h>
 #include <omp.h>
+#include <string>
 #include "mpi_type_util.h"
 
 namespace hpmr {
@@ -29,8 +30,10 @@ class Parallel {
 
   template <class T>
   static void circular_shift(
-      const T* data,
-      const size_t count,
+      const T* send_buf,
+      const size_t send_cnt,
+      T* recv_buf,
+      const size_t recv_cnt,
       const int n_shifts,
       const size_t trunk_size = DEFAULT_TRUNK_SIZE);
 
@@ -79,6 +82,32 @@ T Parallel::reduce_min(const T& t) {
 template <class T>
 void Parallel::broadcast(T& t, const int src_proc_id) {
   MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
+}
+
+template <class T>
+static void Parallel::circular_shift(
+    const T* send_buf,
+    const size_t send_cnt,
+    T* recv_buf,
+    const size_t recv_cnt,
+    const int n_shifts,
+    const size_t trunk_size = DEFAULT_TRUNK_SIZE) {
+  size_t send_pos = 0;
+  size_t recv_pos = 0;
+  const int proc_id = get_proc_id();
+  const int n_procs = get_n_procs();
+  const int dest_proc_id = (proc_id + n_shifts) % n_procs;
+  const int src_proc_id = (proc_id - n_shifts) % n_procs;
+  MPI_Request reqs[2];
+  std::array<bool, 2> pending()
+  while (send_pos < send_cnt || recv_pos < recv_cnt) {
+    if (send_pos < send_cnt) {
+      MPI_Isend();
+    }
+    if (recv_pos < recv_cnt) {
+      MPIIrecv
+    }
+  }
 }
 
 }  // namespace hpmr
