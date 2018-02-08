@@ -29,13 +29,27 @@ class Parallel {
   static void broadcast(T& t, const int src_proc_id);
 
   template <class T>
-  static void circular_shift(
-      const T* send_buf,
-      const size_t send_cnt,
-      T* recv_buf,
-      const size_t recv_cnt,
-      const int n_shifts,
-      const size_t trunk_size = DEFAULT_TRUNK_SIZE);
+  static MPI_Request isend(T* t, const size_t count, const int dest_proc_id);
+
+  template <class T>
+  static MPI_Request irecv(T* t, const size_t count, const int src_proc_id);
+
+  // template <class T>
+  // static void shuffle(
+  //     T& t,
+  //     std::vector<T>& outgoing,
+  //     std::function<void(T&, const T&)>& reducer,
+  //     std::function<void(T&, std::string&)>& serialize,
+  //     std::function<void(T&, const std::string&)>& parse);
+
+  // template <class T>
+  // static void circular_shift(
+  //     const T* send_buf,
+  //     const size_t send_cnt,
+  //     T* recv_buf,
+  //     const size_t recv_cnt,
+  //     const int n_shifts,
+  //     const size_t trunk_size = DEFAULT_TRUNK_SIZE);
 
  private:
   int proc_id;
@@ -84,30 +98,29 @@ void Parallel::broadcast(T& t, const int src_proc_id) {
   MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
 }
 
-template <class T>
-static void Parallel::circular_shift(
-    const T* send_buf,
-    const size_t send_cnt,
-    T* recv_buf,
-    const size_t recv_cnt,
-    const int n_shifts,
-    const size_t trunk_size = DEFAULT_TRUNK_SIZE) {
-  size_t send_pos = 0;
-  size_t recv_pos = 0;
-  const int proc_id = get_proc_id();
-  const int n_procs = get_n_procs();
-  const int dest_proc_id = (proc_id + n_shifts) % n_procs;
-  const int src_proc_id = (proc_id - n_shifts) % n_procs;
-  MPI_Request reqs[2];
-  std::array<bool, 2> pending()
-  while (send_pos < send_cnt || recv_pos < recv_cnt) {
-    if (send_pos < send_cnt) {
-      MPI_Isend();
-    }
-    if (recv_pos < recv_cnt) {
-      MPIIrecv
-    }
-  }
-}
+// template <class T>
+// static void Parallel::circular_shift(
+//     const T* send_buf,
+//     const size_t send_cnt,
+//     T* recv_buf,
+//     const size_t recv_cnt,
+//     const int n_shifts,
+//     const size_t trunk_size = DEFAULT_TRUNK_SIZE) {
+//   size_t send_pos = 0;
+//   size_t recv_pos = 0;
+//   const int proc_id = get_proc_id();
+//   const int n_procs = get_n_procs();
+//   const int dest_proc_id = (proc_id + n_shifts) % n_procs;
+//   const int src_proc_id = (proc_id - n_shifts) % n_procs;
+//   std::vector<MPI_Request> reqs;
+//   while (send_pos < send_cnt || recv_pos < recv_cnt) {
+//     if (send_pos < send_cnt) {
+//       MPI_Isend();
+//     }
+//     if (recv_pos < recv_cnt) {
+//       MPIIrecv
+//     }
+//   }
+// }
 
 }  // namespace hpmr
