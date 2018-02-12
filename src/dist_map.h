@@ -43,7 +43,7 @@ class DistMap {
       const bool verbose = false);
 
   // Shuffle and reduce.
-  void sync(const bool verbose = false);
+  void sync(const bool verbose = false, const size_t trunk_size = DEFAULT_TRUNK_SIZE);
 
  private:
   double max_load_factor;
@@ -57,6 +57,8 @@ class DistMap {
   std::vector<BareConcurrentMap<K, V, H>> remote_maps;
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
+
+  constexpr static size_t DEFAULT_TRUNK_SIZE = 1 << 25;
 
   size_t get_hash_value(const K& key) { return local_map.get_hash_value(key); }
 };
@@ -178,25 +180,48 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::sync(const bool verbose) {
+void DistMap<K, V, H>::sync(const bool verbose, const size_t trunk_size) {
   const int proc_id = Parallel::get_proc_id();
   const int n_procs = Parallel::get_n_procs();
-  const int n_threads = Parallel::get_n_threads();
 
   if (verbose && proc_id == 0) printf("Syncing: ");
 
-  std::string recv_buf;
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
     local_map.set(node->key, local_map.get_hash_value(node->key), node->value);
   };
+  std::string send_buf;
+  std::string recv_buf;
   for (int i = 1; i < n_procs; i++) {
     const int dest_proc_id = (proc_id + i) % n_procs;
     const int src_proc_id = (proc_id - i) % n_procs;
-    // const std::string send_buf = hps::serialize_to_string(remote_maps[dest_proc_id]);
-    // remote_maps[dest_proc_id].clear();
-    // Parallel::circular_shift(send_buf.data(), send_buf.size(), recv_buf, i);
+    // hps::serialize_to_string(remote_maps[dest_proc_id], send_buf);
+    remote_maps[dest_proc_id].clear();
+    size_t send_cnt;
+    size_t recv_cnt;
+    Parallel::isend(&send_cnt, 1, dest_proc_id);
+    Parallel::irecv(&recv_cnt, 1, src_proc_id);
+    Parallel::wait_all();
+    size_t send_pos = 0;
+    size_t recv_pos = 0;
+    recv_buf.resize(recv_cnt);
+    while (send_pos < send_cnt || recv_pos < recv_cnt) {
+      if (send_pos < send_cnt) {
+        const int send_pending_cnt =
+            (send_cnt - send_pos > trunk_size) ? trunk_size : send_cnt - send_pos;
+        Parallel::isend(&send_buf[send_pos], send_pending_cnt, dest_proc_id);
+        send_pos += send_pending_cnt;
+      }
+      if (recv_pos < recv_cnt) {
+        const int recv_pending_cnt =
+            (recv_cnt - recv_pos > trunk_size) ? trunk_size : recv_cnt - recv_pos;
+        Parallel::irecv(&recv_buf[recv_pos], recv_pending_cnt, src_proc_id);
+        recv_pos += recv_pending_cnt;
+      }
+      Parallel::wait_all();
+    }
     // hps::parse_from_string(remote_maps[dest_proc_id], recv_buf);
-    // remote_maps[dest_proc_id].all_node_apply(node_handler);
+    remote_maps[dest_proc_id].all_node_apply(node_handler);
+    remote_maps[dest_proc_id].clear_and_shrink();
     if (verbose && proc_id == 0) printf("%d/%d ", i, n_procs);
   }
   if (verbose && proc_id == 0) printf("Done\n");

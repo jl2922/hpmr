@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include <omp.h>
 #include <string>
+#include <vector>
 #include "mpi_type_util.h"
 
 namespace hpmr {
@@ -29,27 +30,17 @@ class Parallel {
   static void broadcast(T& t, const int src_proc_id);
 
   template <class T>
-  static MPI_Request isend(T* t, const size_t count, const int dest_proc_id);
+  static void isend(
+      const T* data, const int count, const int dest_proc_id, const int tag = DEFAULT_TAG);
 
   template <class T>
-  static MPI_Request irecv(T* t, const size_t count, const int src_proc_id);
+  static void irecv(T* data, const int count, const int src_proc_id, const int tag = DEFAULT_TAG);
 
-  // template <class T>
-  // static void shuffle(
-  //     T& t,
-  //     std::vector<T>& outgoing,
-  //     std::function<void(T&, const T&)>& reducer,
-  //     std::function<void(T&, std::string&)>& serialize,
-  //     std::function<void(T&, const std::string&)>& parse);
-
-  // template <class T>
-  // static void circular_shift(
-  //     const T* send_buf,
-  //     const size_t send_cnt,
-  //     T* recv_buf,
-  //     const size_t recv_cnt,
-  //     const int n_shifts,
-  //     const size_t trunk_size = DEFAULT_TRUNK_SIZE);
+  static void wait_all() {
+    MPI_Status status;
+    for (auto& req : get_instance().reqs) MPI_Wait(&req, &status);
+    get_instance().reqs.clear();
+  }
 
  private:
   int proc_id;
@@ -58,7 +49,9 @@ class Parallel {
 
   int n_threads;
 
-  constexpr static size_t DEFAULT_TRUNK_SIZE = 1 << 25;
+  std::vector<MPI_Request> reqs;
+
+  constexpr static int DEFAULT_TAG = 0;
 
   Parallel() {
     MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
@@ -98,29 +91,18 @@ void Parallel::broadcast(T& t, const int src_proc_id) {
   MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
 }
 
-// template <class T>
-// static void Parallel::circular_shift(
-//     const T* send_buf,
-//     const size_t send_cnt,
-//     T* recv_buf,
-//     const size_t recv_cnt,
-//     const int n_shifts,
-//     const size_t trunk_size = DEFAULT_TRUNK_SIZE) {
-//   size_t send_pos = 0;
-//   size_t recv_pos = 0;
-//   const int proc_id = get_proc_id();
-//   const int n_procs = get_n_procs();
-//   const int dest_proc_id = (proc_id + n_shifts) % n_procs;
-//   const int src_proc_id = (proc_id - n_shifts) % n_procs;
-//   std::vector<MPI_Request> reqs;
-//   while (send_pos < send_cnt || recv_pos < recv_cnt) {
-//     if (send_pos < send_cnt) {
-//       MPI_Isend();
-//     }
-//     if (recv_pos < recv_cnt) {
-//       MPIIrecv
-//     }
-//   }
-// }
+template <class T>
+void Parallel::isend(const T* data, const int count, const int dest_proc_id, const int tag) {
+  MPI_Request req;
+  MPI_Isend(data, count, MpiTypeUtil::get_type(T()), dest_proc_id, tag, MPI_COMM_WORLD, &req);
+  get_instance().reqs.push_back(std::move(req));
+}
+
+template <class T>
+void Parallel::irecv(T* data, const int count, const int src_proc_id, const int tag) {
+  MPI_Request req;
+  MPI_Irecv(data, count, MpiTypeUtil::get_type(T()), src_proc_id, tag, MPI_COMM_WORLD, &req);
+  get_instance().reqs.push_back(std::move(req));
+}
 
 }  // namespace hpmr
