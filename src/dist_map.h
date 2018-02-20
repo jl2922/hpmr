@@ -3,6 +3,7 @@
 #include <functional>
 #include "bare_concurrent_map.h"
 #include "parallel.h"
+#include "random_util.h"
 #include "reducer.h"
 
 namespace hpmr {
@@ -43,7 +44,10 @@ class DistMap {
       const bool verbose = false);
 
   // Shuffle and reduce.
-  void sync(const bool verbose = false, const size_t trunk_size = DEFAULT_TRUNK_SIZE);
+  void sync(
+      const bool verbose = false,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::keep,
+      const size_t trunk_size = DEFAULT_TRUNK_SIZE);
 
  private:
   double max_load_factor;
@@ -56,11 +60,15 @@ class DistMap {
 
   std::vector<BareConcurrentMap<K, V, H>> remote_maps;
 
+  std::vector<int> shuffled_proc_ids;
+
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
   constexpr static size_t DEFAULT_TRUNK_SIZE = 1 << 25;
 
   size_t get_hash_value(const K& key) { return local_map.get_hash_value(key); }
+
+  void find_shuffled_proc_ids();
 };
 
 template <class K, class V, class H>
@@ -81,7 +89,6 @@ void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_buckets() {
-  sync();
   const size_t local_n_buckets = local_map.get_n_buckets();
   return Parallel::reduce_sum(local_n_buckets);
 }
@@ -100,8 +107,8 @@ void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
-  sync();
   const size_t local_n_keys = local_map.get_n_keys();
+  printf("keys: %d\n", local_n_keys);
   return Parallel::reduce_sum(local_n_keys);
 }
 
@@ -120,7 +127,6 @@ void DistMap<K, V, H>::async_set(
 
 template <class K, class V, class H>
 V DistMap<K, V, H>::get(const K& key, const V& default_value) {
-  sync();
   const size_t hash_value = get_hash_value(key);
   const size_t dest_proc_id = hash_value % n_procs_cache;
   V res;
@@ -174,57 +180,76 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
   local_map.all_node_apply(node_handler);
   if (verbose && proc_id == 0) printf("Done\n");
 
-  res.sync(verbose);
+  res.sync(reducer, verbose);
 
   return res;
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::sync(const bool verbose, const size_t trunk_size) {
+void DistMap<K, V, H>::sync(
+    const bool verbose, const std::function<void(V&, const V&)>& reducer, const size_t trunk_size) {
   const int proc_id = Parallel::get_proc_id();
   const int n_procs = Parallel::get_n_procs();
 
   if (verbose && proc_id == 0) printf("Syncing: ");
+  fflush(stdout);
 
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
-    local_map.set(node->key, local_map.get_hash_value(node->key), node->value);
+    local_map.set(node->key, local_map.get_hash_value(node->key), node->value, reducer);
   };
   std::string send_buf;
   std::string recv_buf;
+  char* recv_buf_char = new char[trunk_size];
   for (int i = 1; i < n_procs; i++) {
     const int dest_proc_id = (proc_id + i) % n_procs;
-    const int src_proc_id = (proc_id - i) % n_procs;
-    // hps::serialize_to_string(remote_maps[dest_proc_id], send_buf);
+    const int src_proc_id = (proc_id + n_procs - i) % n_procs;
+    send_buf = remote_maps[dest_proc_id].to_string();
     remote_maps[dest_proc_id].clear();
-    size_t send_cnt;
+    size_t send_cnt = send_buf.size();
     size_t recv_cnt;
     Parallel::isend(&send_cnt, 1, dest_proc_id);
     Parallel::irecv(&recv_cnt, 1, src_proc_id);
     Parallel::wait_all();
+    Parallel::barrier();
     size_t send_pos = 0;
     size_t recv_pos = 0;
     recv_buf.resize(recv_cnt);
+    size_t trunk_tag = 0;
     while (send_pos < send_cnt || recv_pos < recv_cnt) {
       if (send_pos < send_cnt) {
-        const int send_pending_cnt =
-            (send_cnt - send_pos > trunk_size) ? trunk_size : send_cnt - send_pos;
-        Parallel::isend(&send_buf[send_pos], send_pending_cnt, dest_proc_id);
-        send_pos += send_pending_cnt;
+        const int send_trunk_cnt =
+            (send_cnt - send_pos >= trunk_size) ? trunk_size : send_cnt - send_pos;
+        printf("sending %d %d %d\n", send_pos, send_trunk_cnt, send_cnt);
+        Parallel::isend(&send_buf[send_pos], send_trunk_cnt, dest_proc_id, trunk_tag);
+        send_pos += send_trunk_cnt;
       }
       if (recv_pos < recv_cnt) {
-        const int recv_pending_cnt =
-            (recv_cnt - recv_pos > trunk_size) ? trunk_size : recv_cnt - recv_pos;
-        Parallel::irecv(&recv_buf[recv_pos], recv_pending_cnt, src_proc_id);
-        recv_pos += recv_pending_cnt;
+        const int recv_trunk_cnt =
+            (recv_cnt - recv_pos >= trunk_size) ? trunk_size : recv_cnt - recv_pos;
+        printf("recving %d %d %d\n", recv_pos, recv_trunk_cnt, recv_cnt);
+        Parallel::irecv(&recv_buf_char[recv_pos], recv_trunk_cnt, src_proc_id, trunk_tag);
+        // printf("recv cap: %zu\n", recv_buf.capacity());
+
+        // Parallel::irecv(&(recv_buf.at(recv_pos)), recv_trunk_cnt, src_proc_id, trunk_tag);
+        recv_pos += recv_trunk_cnt;
+        // printf("recv cap: %zu\n", recv_buf.capacity());
       }
       Parallel::wait_all();
+      trunk_tag++;
     }
-    // hps::parse_from_string(remote_maps[dest_proc_id], recv_buf);
+    recv_buf.assign(recv_buf_char, recv_cnt);
+    remote_maps[dest_proc_id].from_string(recv_buf);
     remote_maps[dest_proc_id].all_node_apply(node_handler);
     remote_maps[dest_proc_id].clear_and_shrink();
+    printf("S:%d R:%d\n", send_cnt, recv_cnt);
     if (verbose && proc_id == 0) printf("%d/%d ", i, n_procs);
+    Parallel::barrier();
+    // break;
   }
   if (verbose && proc_id == 0) printf("Done\n");
 }
+
+template <class K, class V, class H>
+void DistMap<K, V, H>::get_shuffled_procs() {}
 
 }  // namespace hpmr

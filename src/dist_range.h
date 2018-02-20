@@ -51,7 +51,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
       }
     }
   }
-  res.sync(verbose);
+  res.sync(reducer, verbose);
 
   if (verbose && proc_id == 0) printf("Done\n");
 

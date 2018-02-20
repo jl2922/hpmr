@@ -42,6 +42,8 @@ class Parallel {
     get_instance().reqs.clear();
   }
 
+  static void barrier() { MPI_Barrier(MPI_COMM_WORLD); }
+
  private:
   int proc_id;
 
