@@ -11,7 +11,7 @@
 
 namespace hpmr {
 
-// A concurrent hash map to serve as the fundation of other classes.
+// A concurrent hash map to serve as the foundation of other classes.
 // When updating the map, hash value needs to be provided and shall be consistent with the key.
 template <class K, class V, class H = std::hash<K>>
 class BareConcurrentMap {
@@ -475,8 +475,7 @@ size_t BareConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_bucket
 
 template <class K, class V, class H>
 size_t BareConcurrentMap<K, V, H>::get_hash_value(const K& key) {
-  static size_t n_procs_cache = static_cast<size_t>(Parallel::get_n_procs());
-  return hasher(key) / n_procs_cache;
+  return hasher(key);
 }
 
 }  // namespace hpmr

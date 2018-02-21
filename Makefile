@@ -1,7 +1,7 @@
 # Default options.
 CXX := mpic++
 CXX_WARNING_OPTIONS := -Wall -Wextra
-CXXFLAGS := -std=c++11 -O2 -fopenmp -g $(CXX_WARNING_OPTIONS)
+CXXFLAGS := -std=c++11 -O3 -fopenmp -g $(CXX_WARNING_OPTIONS)
 LDLIBS := -pthread -lpthread
 SRC_DIR := src
 BUILD_DIR := build
@@ -42,7 +42,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 	rm -f ./$(TEST_EXE)
 
-$(TEST_EXE): $(TEST_OBJS) $(OBJS) $(TEST_LIB)
+$(TEST_EXE): $(TEST_OBJS) $(OBJS) $(TEST_MAIN_SRC) $(TEST_LIB) 
 	$(CXX) $(TEST_CXXFLAGS) $(TEST_OBJS) $(OBJS) $(TEST_MAIN_SRC) $(TEST_LIB) -o $(TEST_EXE) $(LDLIBS)
 
 $(BUILD_DIR)/gtest-all.o: $(GTEST_ALL_SRC)

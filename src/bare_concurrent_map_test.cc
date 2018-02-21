@@ -119,13 +119,12 @@ TEST(BareConcurrentMapTest, ClearAndShrink) {
 TEST(BareConcurrentMapTest, ToAndFromString) {
   hpmr::BareConcurrentMap<std::string, int> m1;
   std::hash<std::string> hasher;
-  const size_t n_procs = hpmr::Parallel::get_n_procs();
-  m1.set("aa", hasher("aa") / n_procs, 1);
-  m1.set("bbb", hasher("bbb") / n_procs, 2);
+  m1.set("aa", hasher("aa"), 1);
+  m1.set("bbb", hasher("bbb"), 2);
   const std::string serialized = m1.to_string();
   hpmr::BareConcurrentMap<std::string, int> m2;
   m2.from_string(serialized);
   EXPECT_EQ(m2.get_n_keys(), 2);
-  EXPECT_EQ(m2.get("aa", hasher("aa") / n_procs), 1);
-  EXPECT_EQ(m2.get("bbb", hasher("bbb") / n_procs), 2);
+  EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
+  EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
 }

@@ -2,7 +2,6 @@
 
 #include <mpi.h>
 #include <omp.h>
-#include <string>
 #include <vector>
 #include "mpi_type_util.h"
 
@@ -17,20 +16,26 @@ class Parallel {
 
   static int get_n_threads() { return get_instance().n_threads; }
 
-  template <class T>
-  static T reduce_sum(const T& t);
+  static bool is_master() { return get_proc_id() == 0; }
 
   template <class T>
-  static T reduce_max(const T& t);
+  static void reduce_sum(const T* data, T* res, const int count);
 
   template <class T>
-  static T reduce_min(const T& t);
+  static void reduce_max(const T* data, T* res, const int count);
 
   template <class T>
-  static void broadcast(T& t, const int src_proc_id);
+  static void reduce_min(const T* data, T* res, const int count);
+
+  template <class T>
+  static void broadcast(T* data, const int count, const int src_proc_id);
 
   template <class T>
   static void isend(
+      const T* data, const int count, const int dest_proc_id, const int tag = DEFAULT_TAG);
+
+  template <class T>
+  static void issend(
       const T* data, const int count, const int dest_proc_id, const int tag = DEFAULT_TAG);
 
   template <class T>
@@ -65,38 +70,47 @@ class Parallel {
     static Parallel instance;
     return instance;
   }
+
+  template <class T>
+  static void reduce(const T* data, T* res, const int count, MPI_Op op);
 };
 
 template <class T>
-T Parallel::reduce_sum(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
-  return res;
+void Parallel::reduce_sum(const T* data, T* res, const int count) {
+  reduce(data, res, count, MPI_SUM);
 }
 
 template <class T>
-T Parallel::reduce_max(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_MAX, MPI_COMM_WORLD);
-  return res;
+void Parallel::reduce_max(const T* data, T* res, const int count) {
+  reduce(data, res, count, MPI_MAX);
 }
 
 template <class T>
-T Parallel::reduce_min(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
-  return res;
+void Parallel::reduce_min(const T* data, T* res, const int count) {
+  reduce(data, res, count, MPI_MIN);
 }
 
 template <class T>
-void Parallel::broadcast(T& t, const int src_proc_id) {
-  MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
+void Parallel::reduce(const T* data, T* res, const int count, MPI_Op op) {
+  MPI_Allreduce(data, res, count, MpiTypeUtil::get_type(T()), op, MPI_COMM_WORLD);
+}
+
+template <class T>
+void Parallel::broadcast(T* data, const int count, const int src_proc_id) {
+  MPI_Bcast(data, count, MpiTypeUtil::get_type(T()), src_proc_id, MPI_COMM_WORLD);
 }
 
 template <class T>
 void Parallel::isend(const T* data, const int count, const int dest_proc_id, const int tag) {
   MPI_Request req;
   MPI_Isend(data, count, MpiTypeUtil::get_type(T()), dest_proc_id, tag, MPI_COMM_WORLD, &req);
+  get_instance().reqs.push_back(std::move(req));
+}
+
+template <class T>
+void Parallel::issend(const T* data, const int count, const int dest_proc_id, const int tag) {
+  MPI_Request req;
+  MPI_Issend(data, count, MpiTypeUtil::get_type(T()), dest_proc_id, tag, MPI_COMM_WORLD, &req);
   get_instance().reqs.push_back(std::move(req));
 }
 

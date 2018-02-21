@@ -54,7 +54,7 @@ GTEST_API_ int main(int argc, char** argv) {
   MPI_Init(nullptr, nullptr);
   int proc_id;
   MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-  // if (proc_id != 0) freopen("/dev/null", "w", stdout);
+  if (proc_id != 0) freopen("/dev/null", "w", stdout);
   auto res = RUN_ALL_TESTS();
   MPI_Finalize();
   return res;

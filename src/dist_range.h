@@ -18,7 +18,9 @@ class DistRange {
 
  private:
   T start;
+
   T end;
+
   T step;
 };
 
@@ -36,7 +38,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
 
   const auto& emit = [&](const K& key, const V& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
-    printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
+    printf("MapReduce on %d node(s) (%d threads each):\nMapping: ", n_procs, n_threads);
   }
 
 #pragma omp parallel for schedule(dynamic, 3)
@@ -51,9 +53,9 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
       }
     }
   }
-  res.sync(reducer, verbose);
+  if (verbose && proc_id == 0) printf("\n");
 
-  if (verbose && proc_id == 0) printf("Done\n");
+  res.sync(reducer, verbose);
 
   return res;
 }
