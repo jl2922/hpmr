@@ -28,7 +28,7 @@ class Parallel {
   static void reduce_min(const T* data, T* res, const int count);
 
   template <class T>
-  static void broadcast(T* data, const int count, const int src_proc_id);
+  static void broadcast(T* data, const int count, const int src_proc_id = 0);
 
   template <class T>
   static void isend(
