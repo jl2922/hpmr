@@ -31,7 +31,7 @@ TEST(DistMapTest, SetAndGet) {
 
 TEST(DistMapTest, GetAndSetLoadFactor) {
   hpmr::DistMap<int, int> m;
-  constexpr int N_KEYS = 100;
+  constexpr int N_KEYS = 10;
   m.set_max_load_factor(0.5);
   EXPECT_EQ(m.get_max_load_factor(), 0.5);
   for (int i = 0; i < N_KEYS; i++) {
@@ -41,17 +41,27 @@ TEST(DistMapTest, GetAndSetLoadFactor) {
   EXPECT_GE(m.get_n_buckets(), N_KEYS / 0.5);
 }
 
-// TEST(DistMapTest, ParallelSetAndRehash) {
-//   hpmr::DistMap<int, int> m;
-//   constexpr int N_KEYS = 10;
-// #pragma omp parallel for
-//   for (int i = 0; i < N_KEYS; i++) {
-//     m.async_set(i, i);
-//   }
-//   m.sync(true);
-//   EXPECT_EQ(m.get_n_keys(), N_KEYS);
-//   EXPECT_GE(m.get_n_buckets(), N_KEYS);
-// }
+TEST(DistMapTest, ParallelSetAndRehash) {
+  hpmr::DistMap<int, int> m;
+  constexpr int N_KEYS = 10;
+#pragma omp parallel for
+  for (int i = 0; i < N_KEYS; i++) {
+    m.async_set(i, i);
+  }
+  m.sync(hpmr::Reducer<int>::keep, true);
+  hpmr::Parallel::barrier();
+  const size_t local_n_keys = m.local_map.get_n_keys();
+  // printf("%d: %d\n", hpmr::Parallel::get_proc_id(), local_n_keys);
+
+  size_t n_keys;
+  hpmr::Parallel::reduce_sum(&local_n_keys, &n_keys, 1);
+  // printf("%d: %d\n", hpmr::Parallel::get_proc_id(), n_keys);
+  hpmr::Parallel::barrier();
+  const size_t n_keys_res = m.get_n_keys();
+  EXPECT_EQ(n_keys, N_KEYS);
+  // EXPECT_EQ(m.get_n_keys(), N_KEYS);
+  // EXPECT_GE(m.get_n_buckets(), N_KEYS);
+}
 
 // // TEST(DistMapTest, Clear) {
 // //   hpmr::DistMap<std::string, int> m;
