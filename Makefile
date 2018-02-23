@@ -1,7 +1,7 @@
 # Default options.
 CXX := mpic++
 CXX_WARNING_OPTIONS := -Wall -Wextra
-CXXFLAGS := -std=c++11 -O2 -fopenmp -g $(CXX_WARNING_OPTIONS)
+CXXFLAGS := -std=c++11 -O3 -fopenmp -g $(CXX_WARNING_OPTIONS)
 LDLIBS := -pthread -lpthread
 SRC_DIR := src
 BUILD_DIR := build

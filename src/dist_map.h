@@ -184,7 +184,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
     }
   };
   local_map.all_node_apply(node_handler);
-  if (verbose && proc_id == 0) printf("Done\n");
+  if (verbose && proc_id == 0) printf("#\n");
 
   res.sync(reducer, verbose);
 
@@ -263,10 +263,10 @@ void DistMap<K, V, H>::sync(
     remote_maps[dest_proc_id].from_string(recv_buf);
     remote_maps[dest_proc_id].all_node_apply(node_handler);
     remote_maps[dest_proc_id].clear_and_shrink();
-    if (verbose && Parallel::is_master()) printf("%d/%d ", i, n_procs);
+    if (verbose && Parallel::is_master()) printf("%d/%d ", i, n_procs - 1);
   }
   // Parallel::barrier();
-  if (verbose && Parallel::is_master()) printf("Done\n");
+  if (verbose && Parallel::is_master()) printf("#\n");
 }
 
 template <class K, class V, class H>

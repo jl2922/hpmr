@@ -90,17 +90,18 @@ TEST(DistMapTest, MapReduce) {
 }
 
 TEST(DistMapTest, ParallelMapReduce) {
-  hpmr::DistMap<int, int> m;
-  constexpr int N_KEYS = 100;
+  hpmr::DistMap<int, long long> m;
+  constexpr long long N_KEYS = 10000000;
+  m.reserve(N_KEYS);
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
     m.async_set(i, i);
   }
   m.sync();
   const auto& mapper =
-      [](const int, const int value, const std::function<void(const int, const int)>& emit) {
+      [](const int, const long long value, const std::function<void(const int, const long long)>& emit) {
         emit(0, value);
       };
-  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum, true);
+  auto res = m.mapreduce<int, long long>(mapper, hpmr::Reducer<long long>::sum, true);
   EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
 }
