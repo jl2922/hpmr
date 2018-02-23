@@ -49,7 +49,7 @@ class DistMap {
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::keep,
       const bool verbose = false,
       const int trunk_size = DEFAULT_TRUNK_SIZE);
-  BareConcurrentMap<K, V, DistHasher<K, H>> local_map;
+
 
  private:
   double max_load_factor;
@@ -60,7 +60,7 @@ class DistMap {
 
   H hasher;
 
-  // BareConcurrentMap<K, V, DistHasher<K, H>> local_map;
+  BareConcurrentMap<K, V, DistHasher<K, H>> local_map;
 
   std::vector<BareConcurrentMap<K, V, DistHasher<K, H>>> remote_maps;
 

@@ -7,6 +7,15 @@ SRC_DIR := src
 BUILD_DIR := build
 TEST_EXE := test.out
 
+# Link Google Perf if available.
+GPERFTOOLS_DIR := $(TOOLS_DIR)/gperftools
+UNAME := $(shell uname)
+ifeq ($(UNAME), Linux)
+	ifneq ($(wildcard $(GPERFTOOLS_DIR)),)
+		LDLIBS := -L $(GPERFTOOLS_DIR)/lib $(LDLIBS) -ltcmalloc
+	endif
+endif
+
 # Load Makefile.config if exists.
 LOCAL_MAKEFILE := local.mk
 ifneq ($(wildcard $(LOCAL_MAKEFILE)),)

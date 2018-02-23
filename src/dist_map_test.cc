@@ -91,7 +91,7 @@ TEST(DistMapTest, MapReduce) {
 
 TEST(DistMapTest, ParallelMapReduce) {
   hpmr::DistMap<int, long long> m;
-  constexpr long long N_KEYS = 10000000;
+  constexpr long long N_KEYS = 1000000;
   m.reserve(N_KEYS);
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
