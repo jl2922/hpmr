@@ -111,7 +111,6 @@ void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
-  Parallel::barrier();
   const size_t local_n_keys = local_map.get_n_keys();
   size_t n_keys;
   MPI_Allreduce(&local_n_keys, &n_keys, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
@@ -248,7 +247,7 @@ void DistMap<K, V, H>::sync(
         // printf("%d sending %d %d %d\n", proc_id, send_pos, send_trunk_cnt, send_cnt);
         send_buf.copy(send_buf_char, send_trunk_cnt, send_pos);
         // Parallel::isend<char>(send_buf_char, send_trunk_cnt, dest_proc_id, 1);
-        MPI_Isend(
+        MPI_Issend(
             send_buf_char, send_trunk_cnt, MPI_CHAR, dest_proc_id, 1, MPI_COMM_WORLD, &reqs[1]);
         send_pos += send_trunk_cnt;
       }

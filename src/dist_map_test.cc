@@ -3,24 +3,24 @@
 #include <gtest/gtest.h>
 #include "reducer.h"
 
-// TEST(DistMapTest, Initialization) {
-//   hpmr::DistMap<std::string, int> m;
-//   EXPECT_EQ(m.get_n_keys(), 0);
-// }
+TEST(DistMapTest, Initialization) {
+  hpmr::DistMap<std::string, int> m;
+  EXPECT_EQ(m.get_n_keys(), 0);
+}
 
-// TEST(DistMapTest, Reserve) {
-//   hpmr::DistMap<std::string, int> m;
-//   m.reserve(100);
-//   EXPECT_GE(m.get_n_buckets(), 100);
-// }
+TEST(DistMapTest, Reserve) {
+  hpmr::DistMap<std::string, int> m;
+  m.reserve(100);
+  EXPECT_GE(m.get_n_buckets(), 100);
+}
 
-// TEST(DistMapTest, LargeReserve) {
-//   hpmr::DistMap<std::string, int> m;
-//   const size_t LARGE_N_BUCKETS = 1000000;
-//   m.reserve(LARGE_N_BUCKETS);
-//   const size_t n_buckets = m.get_n_buckets();
-//   EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
-// }
+TEST(DistMapTest, LargeReserve) {
+  hpmr::DistMap<std::string, int> m;
+  const size_t LARGE_N_BUCKETS = 1000000;
+  m.reserve(LARGE_N_BUCKETS);
+  const size_t n_buckets = m.get_n_buckets();
+  EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
+}
 
 TEST(DistMapTest, SetAndGet) {
   hpmr::DistMap<std::string, int> m;
