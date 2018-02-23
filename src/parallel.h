@@ -1,9 +1,9 @@
-#ifndef HPMR_PARALLEL_H
-#define HPMR_PARALLEL_H
+#pragma once
 
 #include <mpi.h>
 #include <omp.h>
-#include "mpi_type_util.h"
+#include <vector>
+#include "mpi_type.h"
 
 namespace hpmr {
 class Parallel {
@@ -16,17 +16,9 @@ class Parallel {
 
   static int get_n_threads() { return get_instance().n_threads; }
 
-  template <class T>
-  static T reduce_sum(const T& t);
+  static bool is_master() { return get_proc_id() == 0; }
 
-  template <class T>
-  static T reduce_max(const T& t);
-
-  template <class T>
-  static T reduce_min(const T& t);
-
-  template <class T>
-  static void broadcast(T& t, const int src_proc_id);
+  static void barrier() { MPI_Barrier(MPI_COMM_WORLD); }
 
  private:
   int proc_id;
@@ -46,33 +38,4 @@ class Parallel {
     return instance;
   }
 };
-
-template <class T>
-T Parallel::reduce_sum(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
-  return res;
-}
-
-template <class T>
-T Parallel::reduce_max(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_MAX, MPI_COMM_WORLD);
-  return res;
-}
-
-template <class T>
-T Parallel::reduce_min(const T& t) {
-  T res;
-  MPI_Allreduce(&t, &res, 1, MpiTypeUtil::get_type(t), MPI_SUM, MPI_COMM_WORLD);
-  return res;
-}
-
-template <class T>
-void Parallel::broadcast(T& t, const int src_proc_id) {
-  MPI_Bcast(&t, 1, MpiTypeUtil::get_type(t), src_proc_id, MPI_COMM_WORLD);
-}
-
 }  // namespace hpmr
-
-#endif

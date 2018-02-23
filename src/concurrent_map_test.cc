@@ -109,7 +109,7 @@ TEST(ConcurrentMapTest, MapReduce) {
     emit(0, value);
   };
   auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(res.get(0), 3);
+  EXPECT_EQ(res.get(0), 3 * hpmr::Parallel::get_n_procs());
 }
 
 TEST(ConcurrentMapTest, ParallelMapReduce) {
@@ -119,10 +119,9 @@ TEST(ConcurrentMapTest, ParallelMapReduce) {
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, i);
   }
-  const auto& mapper =
-      [](const int, const int value, const std::function<void(const int, const int)>& emit) {
-        emit(0, value);
-      };
+  const auto& mapper = [](const int,
+                          const int,
+                          const std::function<void(const int, const int)>& emit) { emit(0, 1); };
   auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
+  EXPECT_EQ(res.get(0), N_KEYS * hpmr::Parallel::get_n_procs());
 }

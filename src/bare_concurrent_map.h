@@ -4,13 +4,15 @@
 #include <functional>
 #include <memory>
 #include <vector>
+#include "../hps/src/hps.h"
 #include "hash_node.h"
 #include "parallel.h"
 #include "reducer.h"
 
 namespace hpmr {
 
-// A bare concurrent hash map to serve as the fundation of other classes.
+// A concurrent hash map to serve as the foundation of other classes.
+// When updating the map, hash value needs to be provided and shall be consistent with the key.
 template <class K, class V, class H = std::hash<K>>
 class BareConcurrentMap {
  public:
@@ -65,6 +67,10 @@ class BareConcurrentMap {
   // Apply node_handler to all the hash nodes.
   void all_node_apply(
       const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler);
+
+  std::string to_string();
+
+  void from_string(const std::string& str);
 
  private:
   size_t n_keys;
@@ -316,6 +322,71 @@ void BareConcurrentMap<K, V, H>::all_node_apply_recursive(
 }
 
 template <class K, class V, class H>
+std::string BareConcurrentMap<K, V, H>::to_string() {
+  // Parallel serialization.
+  const int n_threads = Parallel::get_n_threads();
+  std::vector<std::string> ostrs(n_threads);
+  std::vector<hps::OutputBuffer<std::string>> obs;
+  std::vector<size_t> counts(n_threads, 0);
+  obs.reserve(n_threads);
+  for (int i = 0; i < n_threads; i++) obs.push_back(hps::OutputBuffer<std::string>(ostrs[i]));
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
+    const int thread_id = Parallel::get_thread_id();
+    hps::Serializer<K, std::string>::serialize(node->key, obs[thread_id]);
+    hps::Serializer<V, std::string>::serialize(node->value, obs[thread_id]);
+    counts[thread_id]++;
+  };
+  all_node_apply(node_handler);
+
+  // Combine results from each thread.
+  size_t total_size = 0;
+  for (int i = 0; i < n_threads; i++) {
+    obs[i].flush();
+    total_size += ostrs[i].size();
+  }
+  std::string str;
+  str.reserve(total_size + n_threads * 8);
+  hps::OutputBuffer<std::string> ob_str(str);
+  for (int i = 0; i < n_threads; i++) {
+    hps::Serializer<size_t, std::string>::serialize(counts[i], ob_str);
+    hps::Serializer<std::string, std::string>::serialize(ostrs[i], ob_str);
+  }
+  ob_str.flush();
+  return str;
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::from_string(const std::string& str) {
+  // Load strings.
+  const int n_threads = Parallel::get_n_threads();
+  std::vector<std::string> istrs(n_threads);
+  std::vector<size_t> counts(n_threads);
+  hps::InputBuffer<std::string> ib_str(str);
+  size_t total_count = 0;
+  for (int i = 0; i < n_threads; i++) {
+    hps::Serializer<size_t, std::string>::parse(counts[i], ib_str);
+    hps::Serializer<std::string, std::string>::parse(istrs[i], ib_str);
+    total_count += counts[i];
+  }
+  clear();
+  reserve(total_count);
+
+  // Parallel parsing and insert.
+#pragma omp parallel
+  {
+    const int thread_id = Parallel::get_thread_id();
+    K key;
+    V value;
+    hps::InputBuffer<std::string> thread_ib(istrs[thread_id]);
+    for (size_t j = 0; j < counts[thread_id]; j++) {
+      hps::Serializer<K, std::string>::parse(key, thread_ib);
+      hps::Serializer<V, std::string>::parse(value, thread_ib);
+      set(key, get_hash_value(key), value);
+    }
+  }
+}
+
+template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::lock_all_segments() {
   for (auto& lock : segment_locks) omp_set_lock(&lock);
 }
@@ -404,8 +475,7 @@ size_t BareConcurrentMap<K, V, H>::get_n_rehashing_buckets(const size_t n_bucket
 
 template <class K, class V, class H>
 size_t BareConcurrentMap<K, V, H>::get_hash_value(const K& key) {
-  static size_t n_procs_cache = static_cast<size_t>(Parallel::get_n_procs());
-  return hasher(key) / n_procs_cache;
+  return hasher(key);
 }
 
 }  // namespace hpmr

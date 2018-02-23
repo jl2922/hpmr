@@ -6,9 +6,9 @@
 
 namespace hpmr {
 template <class T>
-class DistRange {
+class Range {
  public:
-  DistRange(const T start, const T end, const T step = 1) : start(start), end(end), step(step) {}
+  Range(const T start, const T end, const T step = 1) : start(start), end(end), step(step) {}
 
   template <class K, class V, class H = std::hash<K>>
   DistMap<K, V, H> mapreduce(
@@ -18,13 +18,15 @@ class DistRange {
 
  private:
   T start;
+
   T end;
+
   T step;
 };
 
 template <class T>
 template <class K, class V, class H>
-DistMap<K, V, H> DistRange<T>::mapreduce(
+DistMap<K, V, H> Range<T>::mapreduce(
     const std::function<void(const T, const std::function<void(const K&, const V&)>&)>& mapper,
     const std::function<void(V&, const V&)>& reducer,
     const bool verbose) {
@@ -36,7 +38,7 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
 
   const auto& emit = [&](const K& key, const V& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
-    printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
+    printf("MapReduce on %d node(s) (%d threads each):\nMapping: ", n_procs, n_threads);
   }
 
 #pragma omp parallel for schedule(dynamic, 3)
@@ -51,9 +53,9 @@ DistMap<K, V, H> DistRange<T>::mapreduce(
       }
     }
   }
-  res.sync(verbose);
+  if (verbose && proc_id == 0) printf("\n");
 
-  if (verbose && proc_id == 0) printf("Done\n");
+  res.sync(reducer, verbose);
 
   return res;
 }

@@ -89,7 +89,7 @@ DistMap<KR, VR, HR> ConcurrentMap<K, V, H>::mapreduce(
   };
   bare_map.all_node_apply(node_handler);
 
-  res.sync(verbose);
+  res.sync(reducer, verbose);
 
   if (verbose && proc_id == 0) printf("Done\n");
 

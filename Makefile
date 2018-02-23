@@ -1,11 +1,20 @@
 # Default options.
 CXX := mpic++
 CXX_WARNING_OPTIONS := -Wall -Wextra
-CXXFLAGS := -std=c++11 -O3 -fopenmp $(CXX_WARNING_OPTIONS)
+CXXFLAGS := -std=c++11 -O3 -fopenmp -g $(CXX_WARNING_OPTIONS)
 LDLIBS := -pthread -lpthread
 SRC_DIR := src
 BUILD_DIR := build
 TEST_EXE := test.out
+
+# Link Google Perf if available.
+GPERFTOOLS_DIR := $(TOOLS_DIR)/gperftools
+UNAME := $(shell uname)
+ifeq ($(UNAME), Linux)
+	ifneq ($(wildcard $(GPERFTOOLS_DIR)),)
+		LDLIBS := -L $(GPERFTOOLS_DIR)/lib $(LDLIBS) -ltcmalloc
+	endif
+endif
 
 # Load Makefile.config if exists.
 LOCAL_MAKEFILE := local.mk
@@ -36,13 +45,13 @@ test: $(TEST_EXE)
 	./$(TEST_EXE)
 
 test_mpi: $(TEST_EXE)
-	mpirun -n 2 ./$(TEST_EXE)
+	mpirun -n 4 ./$(TEST_EXE)
 
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f ./$(TEST_EXE)
 
-$(TEST_EXE): $(TEST_OBJS) $(OBJS) $(TEST_LIB)
+$(TEST_EXE): $(TEST_OBJS) $(OBJS) $(TEST_MAIN_SRC) $(TEST_LIB) 
 	$(CXX) $(TEST_CXXFLAGS) $(TEST_OBJS) $(OBJS) $(TEST_MAIN_SRC) $(TEST_LIB) -o $(TEST_EXE) $(LDLIBS)
 
 $(BUILD_DIR)/gtest-all.o: $(GTEST_ALL_SRC)
