@@ -50,7 +50,6 @@ class DistMap {
       const bool verbose = false,
       const int trunk_size = DEFAULT_TRUNK_SIZE);
 
-
  private:
   double max_load_factor;
 
@@ -222,10 +221,7 @@ void DistMap<K, V, H>::sync(
     size_t recv_cnt;
     MPI_Irecv(&recv_cnt, 1, MpiType<size_t>::value, src_proc_id, 0, MPI_COMM_WORLD, &reqs[0]);
     MPI_Isend(&send_cnt, 1, MpiType<size_t>::value, dest_proc_id, 0, MPI_COMM_WORLD, &reqs[1]);
-    // Parallel::irecv(&recv_cnt, 1, src_proc_id);
-    // Parallel::isend(&send_cnt, 1, dest_proc_id);
     MPI_Waitall(2, reqs, stats);
-    // Parallel::barrier();
     size_t send_pos = 0;
     size_t recv_pos = 0;
     recv_buf.clear();
@@ -237,35 +233,24 @@ void DistMap<K, V, H>::sync(
       const int send_trunk_cnt =
           (send_cnt - send_pos >= trunk_size_u) ? trunk_size : send_cnt - send_pos;
       if (recv_pos < recv_cnt) {
-        // printf("%d recving %d %d %d\n", proc_id, recv_pos, recv_trunk_cnt, recv_cnt);
-        // Parallel::irecv<char>(recv_buf_char, recv_trunk_cnt, src_proc_id, 1);
         MPI_Irecv(
             recv_buf_char, recv_trunk_cnt, MPI_CHAR, src_proc_id, 1, MPI_COMM_WORLD, &reqs[0]);
         recv_pos += recv_trunk_cnt;
       }
       if (send_pos < send_cnt) {
-        // printf("%d sending %d %d %d\n", proc_id, send_pos, send_trunk_cnt, send_cnt);
         send_buf.copy(send_buf_char, send_trunk_cnt, send_pos);
-        // Parallel::isend<char>(send_buf_char, send_trunk_cnt, dest_proc_id, 1);
         MPI_Issend(
             send_buf_char, send_trunk_cnt, MPI_CHAR, dest_proc_id, 1, MPI_COMM_WORLD, &reqs[1]);
         send_pos += send_trunk_cnt;
       }
-      // Parallel::wait_all();
       MPI_Waitall(2, reqs, stats);
       recv_buf.append(recv_buf_char, recv_trunk_cnt);
-      // for (int i = 0; i < recv_trunk_cnt; i++) printf("%u ", recv_buf_char[i]);
-      // printf("\n");
-      // for (int i = 0; i < send_trunk_cnt; i++) printf("%u ", send_buf_char[i]);
-      // printf("\n");
-      // printf("recv_buf size: %d\n", recv_buf.size());
     }
     remote_maps[dest_proc_id].from_string(recv_buf);
     remote_maps[dest_proc_id].all_node_apply(node_handler);
     remote_maps[dest_proc_id].clear_and_shrink();
     if (verbose && Parallel::is_master()) printf("%d/%d ", i, n_procs - 1);
   }
-  // Parallel::barrier();
   if (verbose && Parallel::is_master()) printf("#\n");
 }
 
@@ -289,7 +274,6 @@ std::vector<int> DistMap<K, V, H>::generate_shuffled_procs() {
   }
 
   MPI_Bcast(res.data(), n_procs, MPI_INT, 0, MPI_COMM_WORLD);
-  // Parallel::broadcast(res.data(), n_procs);
 
   return res;
 }
@@ -301,7 +285,7 @@ int DistMap<K, V, H>::get_base_id(const std::vector<int>& shuffled_procs) {
   for (int i = 0; i < n_procs; i++) {
     if (shuffled_procs[i] == proc_id) return i;
   }
-  throw std::runtime_error("impossible state");
+  throw std::runtime_error("proc id not found in shuffled procs.");
 }
 
 }  // namespace hpmr

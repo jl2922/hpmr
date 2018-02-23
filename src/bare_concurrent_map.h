@@ -350,7 +350,6 @@ std::string BareConcurrentMap<K, V, H>::to_string() {
   for (int i = 0; i < n_threads; i++) {
     hps::Serializer<size_t, std::string>::serialize(counts[i], ob_str);
     hps::Serializer<std::string, std::string>::serialize(ostrs[i], ob_str);
-    // printf("%d put count %d : %d\n", Parallel::get_proc_id(), i, counts[i]);
   }
   ob_str.flush();
   return str;
@@ -368,7 +367,6 @@ void BareConcurrentMap<K, V, H>::from_string(const std::string& str) {
     hps::Serializer<size_t, std::string>::parse(counts[i], ib_str);
     hps::Serializer<std::string, std::string>::parse(istrs[i], ib_str);
     total_count += counts[i];
-    // printf("%d got counts %d : %d\n", Parallel::get_proc_id(), i, counts[i]);
   }
   clear();
   reserve(total_count);
