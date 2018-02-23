@@ -1,7 +1,7 @@
-// #include "bare_concurrent_map.h"
+#include "bare_concurrent_map.h"
 
-// #include <gtest/gtest.h>
-// #include "reducer.h"
+#include <gtest/gtest.h>
+#include "reducer.h"
 
 // TEST(BareConcurrentMapTest, Initialization) {
 //   hpmr::BareConcurrentMap<std::string, int> m;
@@ -116,15 +116,15 @@
 //   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
 // }
 
-// TEST(BareConcurrentMapTest, ToAndFromString) {
-//   hpmr::BareConcurrentMap<std::string, int> m1;
-//   std::hash<std::string> hasher;
-//   m1.set("aa", hasher("aa"), 1);
-//   m1.set("bbb", hasher("bbb"), 2);
-//   const std::string serialized = m1.to_string();
-//   hpmr::BareConcurrentMap<std::string, int> m2;
-//   m2.from_string(serialized);
-//   EXPECT_EQ(m2.get_n_keys(), 2);
-//   EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
-//   EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
-// }
+TEST(BareConcurrentMapTest, ToAndFromString) {
+  hpmr::BareConcurrentMap<std::string, int> m1;
+  std::hash<std::string> hasher;
+  m1.set("aa", hasher("aa"), 1);
+  m1.set("bbb", hasher("bbb"), 2);
+  const std::string serialized = m1.to_string();
+  hpmr::BareConcurrentMap<std::string, int> m2;
+  m2.from_string(serialized);
+  EXPECT_EQ(m2.get_n_keys(), 2);
+  EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
+  EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
+}

@@ -79,25 +79,21 @@ DistMap<K, V, H>::DistMap() {
   proc_id_u = static_cast<size_t>(Parallel::get_proc_id());
   remote_maps.resize(n_procs_u);
   set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
-  Parallel::barrier();
 }
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
-  Parallel::barrier();
   local_map.reserve(n_buckets_min / n_procs_u);
   for (auto& remote_map : remote_maps) {
     remote_map.reserve(n_buckets_min / n_procs_u / n_procs_u);
   }
-  Parallel::barrier();
 }
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_buckets() {
   const size_t local_n_buckets = local_map.get_n_buckets();
   size_t n_buckets;
-  Parallel::reduce_sum(&local_n_buckets, &n_buckets, 1);
-  Parallel::barrier();
+  MPI_Allreduce(&local_n_buckets, &n_buckets, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
   return n_buckets;
 }
 
@@ -108,21 +104,17 @@ double DistMap<K, V, H>::get_load_factor() {
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
-  Parallel::barrier();
   this->max_load_factor = max_load_factor;
   local_map.set_max_load_factor(max_load_factor);
   for (auto& remote_map : remote_maps) remote_map.set_max_load_factor(max_load_factor);
-  Parallel::barrier();
 }
 
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
   Parallel::barrier();
   const size_t local_n_keys = local_map.get_n_keys();
-  printf("local n keys: %d\n", local_n_keys);
   size_t n_keys;
-  // Parallel::reduce_sum(&local_n_keys, &n_keys, 1);
-  Parallel::barrier();
+  MPI_Allreduce(&local_n_keys, &n_keys, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
   return n_keys;
 }
 
@@ -135,14 +127,12 @@ void DistMap<K, V, H>::async_set(
   if (dest_proc_id == proc_id_u) {
     local_map.set(key, map_hash_value, value, reducer);
   } else {
-    printf("put %d to %d\n", key, dest_proc_id);
     remote_maps[dest_proc_id].set(key, map_hash_value, value, reducer);
   }
 }
 
 template <class K, class V, class H>
 V DistMap<K, V, H>::get(const K& key, const V& default_value) {
-  Parallel::barrier();
   const size_t hash_value = hasher(key);
   const size_t dest_proc_id = hash_value % n_procs_u;
   const size_t map_hash_value = hash_value / n_procs_u;
@@ -150,7 +140,7 @@ V DistMap<K, V, H>::get(const K& key, const V& default_value) {
   if (dest_proc_id == proc_id_u) {
     res = local_map.get(key, map_hash_value, default_value);
   }
-  Parallel::broadcast(&res, 1, dest_proc_id);
+  MPI_Bcast(&res, 1, MpiType<V>::value, dest_proc_id, MPI_COMM_WORLD);
   return res;
 }
 
@@ -158,73 +148,72 @@ template <class K, class V, class H>
 void DistMap<K, V, H>::clear() {
   local_map.clear();
   for (auto& remote_map : remote_maps) remote_map.clear();
-  Parallel::barrier();
 }
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::clear_and_shrink() {
   local_map.clear_and_shrink();
   for (auto& remote_map : remote_maps) remote_map.clear_and_shrink();
-  Parallel::barrier();
 }
 
-// template <class K, class V, class H>
-// template <class KR, class VR, class HR>
-// DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
-//     const std::function<void(const K&, const V&, const std::function<void(const KR&, const
-//     VR&)>&)>&
-//         mapper,
-//     const std::function<void(VR&, const VR&)>& reducer,
-//     const bool verbose) {
-//   DistMap<KR, VR, HR> res;
-//   const int proc_id = Parallel::get_proc_id();
-//   const int n_procs = Parallel::get_n_procs();
-//   const int n_threads = Parallel::get_n_threads();
-//   double target_progress = 0.1;
+template <class K, class V, class H>
+template <class KR, class VR, class HR>
+DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
+    const std::function<void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>&
+        mapper,
+    const std::function<void(VR&, const VR&)>& reducer,
+    const bool verbose) {
+  DistMap<KR, VR, HR> res;
+  const int proc_id = Parallel::get_proc_id();
+  const int n_procs = Parallel::get_n_procs();
+  const int n_threads = Parallel::get_n_threads();
+  double target_progress = 0.1;
 
-//   const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
-//   if (verbose && proc_id == 0) {
-//     printf("MapReduce on %d node(s) (%d threads):\nMapping: ", n_procs, n_threads * n_procs);
-//   }
+  const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
+  if (verbose && proc_id == 0) {
+    printf("MapReduce on %d node(s) (%d threads each):\nMapping: ", n_procs, n_threads);
+  }
 
-//   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
-//     mapper(node->key, node->value, emit);
-//     const int thread_id = Parallel::get_thread_id();
-//     if (verbose && proc_id == 0 && thread_id == 0) {
-//       while (target_progress <= progress) {
-//         printf("%.1f%% ", target_progress);
-//         target_progress *= 2;
-//       }
-//     }
-//   };
-//   local_map.all_node_apply(node_handler);
-//   if (verbose && proc_id == 0) printf("Done\n");
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
+    mapper(node->key, node->value, emit);
+    const int thread_id = Parallel::get_thread_id();
+    if (verbose && proc_id == 0 && thread_id == 0) {
+      while (target_progress <= progress) {
+        printf("%.1f%% ", target_progress);
+        target_progress *= 2;
+      }
+    }
+  };
+  local_map.all_node_apply(node_handler);
+  if (verbose && proc_id == 0) printf("Done\n");
 
-//   res.sync(reducer, verbose);
+  res.sync(reducer, verbose);
 
-//   return res;
-// }
+  return res;
+}
 
 template <class K, class V, class H>
 void DistMap<K, V, H>::sync(
     const std::function<void(V&, const V&)>& reducer, const bool verbose, const int trunk_size) {
-  Parallel::barrier();
   assert(trunk_size > 0);
   const int n_procs = Parallel::get_n_procs();
-  const int proc_id = Parallel::get_proc_id();
 
   if (verbose && Parallel::is_master()) printf("Syncing: ");
 
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
-    assert(hasher(node->key) % n_procs_u == proc_id_u);
     local_map.set(node->key, hasher(node->key) / n_procs_u, node->value, reducer);
   };
-  std::string send_buf;
-  std::string recv_buf;
-  char recv_buf_char[trunk_size];
+
   // Accelerate overall network transfer through randomization.
   const auto& shuffled_procs = generate_shuffled_procs();
   const int base_id = get_base_id(shuffled_procs);
+
+  std::string send_buf;
+  std::string recv_buf;
+  char send_buf_char[trunk_size];
+  char recv_buf_char[trunk_size];
+  MPI_Request reqs[2];
+  MPI_Status stats[2];
   for (int i = 1; i < n_procs; i++) {
     const int dest_proc_id = shuffled_procs[(base_id + i) % n_procs];
     const int src_proc_id = shuffled_procs[(base_id + n_procs - i) % n_procs];
@@ -232,12 +221,15 @@ void DistMap<K, V, H>::sync(
     remote_maps[dest_proc_id].clear();
     size_t send_cnt = send_buf.size();
     size_t recv_cnt;
-    Parallel::irecv(&recv_cnt, 1, src_proc_id);
-    Parallel::isend(&send_cnt, 1, dest_proc_id);
-    Parallel::wait_all();
-    Parallel::barrier();
+    MPI_Irecv(&recv_cnt, 1, MpiType<size_t>::value, src_proc_id, 0, MPI_COMM_WORLD, &reqs[0]);
+    MPI_Isend(&send_cnt, 1, MpiType<size_t>::value, dest_proc_id, 0, MPI_COMM_WORLD, &reqs[1]);
+    // Parallel::irecv(&recv_cnt, 1, src_proc_id);
+    // Parallel::isend(&send_cnt, 1, dest_proc_id);
+    MPI_Waitall(2, reqs, stats);
+    // Parallel::barrier();
     size_t send_pos = 0;
     size_t recv_pos = 0;
+    recv_buf.clear();
     recv_buf.reserve(recv_cnt);
     const size_t trunk_size_u = static_cast<size_t>(trunk_size);
     while (send_pos < send_cnt || recv_pos < recv_cnt) {
@@ -246,23 +238,35 @@ void DistMap<K, V, H>::sync(
       const int send_trunk_cnt =
           (send_cnt - send_pos >= trunk_size_u) ? trunk_size : send_cnt - send_pos;
       if (recv_pos < recv_cnt) {
-        printf("%d recving %d %d %d\n", proc_id, recv_pos, recv_trunk_cnt, recv_cnt);
-        Parallel::irecv(recv_buf_char, recv_trunk_cnt, src_proc_id);
+        // printf("%d recving %d %d %d\n", proc_id, recv_pos, recv_trunk_cnt, recv_cnt);
+        // Parallel::irecv<char>(recv_buf_char, recv_trunk_cnt, src_proc_id, 1);
+        MPI_Irecv(
+            recv_buf_char, recv_trunk_cnt, MPI_CHAR, src_proc_id, 1, MPI_COMM_WORLD, &reqs[0]);
         recv_pos += recv_trunk_cnt;
       }
       if (send_pos < send_cnt) {
-        printf("%d sending %d %d %d\n", proc_id, send_pos, send_trunk_cnt, send_cnt);
-        Parallel::issend(&send_buf[send_pos], send_trunk_cnt, dest_proc_id);
+        // printf("%d sending %d %d %d\n", proc_id, send_pos, send_trunk_cnt, send_cnt);
+        send_buf.copy(send_buf_char, send_trunk_cnt, send_pos);
+        // Parallel::isend<char>(send_buf_char, send_trunk_cnt, dest_proc_id, 1);
+        MPI_Isend(
+            send_buf_char, send_trunk_cnt, MPI_CHAR, dest_proc_id, 1, MPI_COMM_WORLD, &reqs[1]);
         send_pos += send_trunk_cnt;
       }
-      Parallel::wait_all();
+      // Parallel::wait_all();
+      MPI_Waitall(2, reqs, stats);
       recv_buf.append(recv_buf_char, recv_trunk_cnt);
+      // for (int i = 0; i < recv_trunk_cnt; i++) printf("%u ", recv_buf_char[i]);
+      // printf("\n");
+      // for (int i = 0; i < send_trunk_cnt; i++) printf("%u ", send_buf_char[i]);
+      // printf("\n");
+      // printf("recv_buf size: %d\n", recv_buf.size());
     }
     remote_maps[dest_proc_id].from_string(recv_buf);
     remote_maps[dest_proc_id].all_node_apply(node_handler);
     remote_maps[dest_proc_id].clear_and_shrink();
+    if (verbose && Parallel::is_master()) printf("%d/%d ", i, n_procs);
   }
-  Parallel::barrier();
+  // Parallel::barrier();
   if (verbose && Parallel::is_master()) printf("Done\n");
 }
 
@@ -285,7 +289,8 @@ std::vector<int> DistMap<K, V, H>::generate_shuffled_procs() {
     }
   }
 
-  Parallel::broadcast(res.data(), n_procs);
+  MPI_Bcast(res.data(), n_procs, MPI_INT, 0, MPI_COMM_WORLD);
+  // Parallel::broadcast(res.data(), n_procs);
 
   return res;
 }
