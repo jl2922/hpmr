@@ -42,6 +42,14 @@ class BareConcurrentMap {
       const V& value,
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
+  void async_set(
+      const K& key,
+      const size_t hash_value,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
+  void sync(const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
   void unset(const K& key, const size_t hash_value);
 
   void get(const K& key, const size_t hash_value, const std::function<void(const V&)>& handler);
@@ -89,6 +97,8 @@ class BareConcurrentMap {
   std::vector<omp_lock_t> rehashing_segment_locks;
 
   std::vector<std::unique_ptr<HashNode<K, V>>> buckets;
+
+  std::vector<std::unique_ptr<HashPendingNode<K, V>>> pending_nodes;
 
   constexpr static size_t N_INITIAL_BUCKETS = 11;
 
@@ -192,6 +202,55 @@ void BareConcurrentMap<K, V, H>::set(
   };
   key_node_apply(key, hash_value, node_handler);
   if (n_keys >= n_buckets * max_load_factor) rehash();
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::async_set(
+    const K& key,
+    const size_t hash_value,
+    const V& value,
+    const std::funciton<void(V&, const V&)>& reducer) {
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
+    if (!node) {
+      node.reset(new HashNode<K, V>(key, value));
+#pragma omp atomic
+      n_keys++;
+    } else {
+      reducer(node->value, value);
+    }
+  };
+
+  const size_t n_buckets_snapshot = n_buckets;
+  const size_t bucket_id = hash_value % n_buckets_snapshot;
+  const size_t segment_id = bucket_id % n_segments;
+  auto& lock = segment_locks[segment_id];
+  bool applied = false;
+  if (omp_test_lock(&lock)) {
+    if (n_buckets_snapshot != n_buckets) {
+      omp_unset_lock(&lock);
+    }
+    key_node_apply_recursive(buckets[bucket_id], key, node_handler);
+    omp_unset_lock(&lock);
+    applied = true;
+    if (n_keys >= n_buckets * max_load_factor) rehash();
+  }
+
+  const int thread_id = Parallel::get_thread_id();
+  HashPendingNode<K, V>* pending_node_ptr = pending_nodes[thread_id].get();
+  while (pending_node_ptr != nullptr) {
+    if (pending_node_ptr->key == key) {
+      reducer(pending_node_ptr->value, value);
+      applied = true;
+    }
+
+    pending_node_ptr = pending_node_ptr->next.get();
+  }
+  if (applied == false) {
+    
+  }
+  // if (!applied) {
+  //       pending_nodes.
+  // }
 }
 
 template <class K, class V, class H>
