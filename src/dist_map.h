@@ -171,7 +171,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
 
   const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
   if (verbose && proc_id == 0) {
-    printf("MapReduce on %d node(s) (%d threads each):\nMapping: ", n_procs, n_threads);
+    printf("MapReduce on %d node(s) (%d threads each node):\nMapping: ", n_procs, n_threads);
   }
 
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
