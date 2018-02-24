@@ -119,6 +119,7 @@ void BareAsyncMap<K, V, H>::sync(const std::function<void(V&, const V&)>& reduce
   {
     const int thread_id = omp_get_thread_num();
     const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
+      // maps[thread_id].set(node->key, 1, node->value, reducer);
       maps[thread_id].set(node->key, async_hasher(node->key), node->value, reducer);
     };
     size_t thread_n_keys = 0;
