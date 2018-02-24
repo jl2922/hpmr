@@ -12,7 +12,7 @@
 
 namespace hpmr {
 
-// A concurrent map that allows providing hash values.
+// A concurrent map that requires providing hash values when use.
 template <class K, class V, class H = std::hash<K>>
 class BareConcurrentMap {
  public:

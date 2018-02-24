@@ -9,7 +9,7 @@
 
 namespace hpmr {
 
-// A map that allows providing hash values.
+// A map that requires providing hash values when use.
 template <class K, class V, class H = std::hash<K>>
 class BareMap {
  public:
@@ -79,8 +79,6 @@ class BareMap {
 
   void rehash(const size_t n_rehashing_buckets);
 
-  // Get the number of hash buckets to use.
-  // This number shall be larger than or equal to the specified number.
   size_t get_n_rehashing_buckets(const size_t n_buckets_min) const;
 
   void key_node_apply_recursive(
@@ -88,7 +86,7 @@ class BareMap {
       const K& key,
       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
 
-  // Recursively apply the handler to each node on the list from the node specified (post-order).
+  // Recursively apply the handler in post-order.
   void all_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
       const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
