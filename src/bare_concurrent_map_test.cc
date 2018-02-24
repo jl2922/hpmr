@@ -75,7 +75,7 @@ TEST(BareConcurrentMapTest, ParallelSetAndRehash) {
 TEST(BareConcurrentMapTest, LargeParallelSetAndRehash) {
   hpmr::BareConcurrentMap<int, int> m;
   std::hash<int> hasher;
-  constexpr int N_KEYS = 10000000;
+  constexpr int N_KEYS = 1000000;
   m.reserve(N_KEYS);
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
