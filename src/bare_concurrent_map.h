@@ -6,13 +6,13 @@
 #include <vector>
 #include "../hps/src/hps.h"
 #include "hash_node.h"
+#include "hash_pending_node.h"
 #include "parallel.h"
 #include "reducer.h"
 
 namespace hpmr {
 
-// A concurrent hash map to serve as the foundation of other classes.
-// When updating the map, hash value needs to be provided and shall be consistent with the key.
+// A concurrent map that allows providing hash values.
 template <class K, class V, class H = std::hash<K>>
 class BareConcurrentMap {
  public:
@@ -114,13 +114,15 @@ class BareConcurrentMap {
   // This number shall be larger than or equal to the specified number.
   size_t get_n_rehashing_buckets(const size_t n_buckets_min) const;
 
-  // Recursively find the node with the specified key on the list starting from the node specified.
-  // Then apply the specified handler to that node.
-  // If the key does not exist, apply the handler to the unassociated node at the end of the list.
   void key_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
       const K& key,
       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
+
+  void pending_node_apply_recursive(
+      std::unique_ptr<HashPendingNode<K, V>>& node,
+      const K& key,
+      const std::function<void(std::unique_ptr<HashPendingNode<K, V>>&)>& node_handler);
 
   // Recursively apply the handler to each node on the list from the node specified (post-order).
   void all_node_apply_recursive(
@@ -209,48 +211,57 @@ void BareConcurrentMap<K, V, H>::async_set(
     const K& key,
     const size_t hash_value,
     const V& value,
-    const std::funciton<void(V&, const V&)>& reducer) {
-  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
-    if (!node) {
-      node.reset(new HashNode<K, V>(key, value));
-#pragma omp atomic
-      n_keys++;
-    } else {
-      reducer(node->value, value);
-    }
-  };
+    const std::function<void(V&, const V&)>& reducer) {
+//   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
+//     if (!node) {
+//       node.reset(new HashNode<K, V>(key, value));
+// #pragma omp atomic
+//       n_keys++;
+//     } else {
+//       reducer(node->value, value);
+//     }
+//   };
 
-  const size_t n_buckets_snapshot = n_buckets;
-  const size_t bucket_id = hash_value % n_buckets_snapshot;
-  const size_t segment_id = bucket_id % n_segments;
-  auto& lock = segment_locks[segment_id];
-  bool applied = false;
-  if (omp_test_lock(&lock)) {
-    if (n_buckets_snapshot != n_buckets) {
-      omp_unset_lock(&lock);
-    }
-    key_node_apply_recursive(buckets[bucket_id], key, node_handler);
-    omp_unset_lock(&lock);
-    applied = true;
-    if (n_keys >= n_buckets * max_load_factor) rehash();
-  }
+//   const size_t n_buckets_snapshot = n_buckets;
+//   const size_t bucket_id = hash_value % n_buckets_snapshot;
+//   const size_t segment_id = bucket_id % n_segments;
+//   auto& lock = segment_locks[segment_id];
+//   bool applied = false;
+//   if (omp_test_lock(&lock)) {
+//     if (n_buckets_snapshot != n_buckets) {
+//       omp_unset_lock(&lock);
+//     }
+//     key_node_apply_recursive(buckets[bucket_id], key, node_handler);
+//     omp_unset_lock(&lock);
+//     applied = true;
+//     if (n_keys >= n_buckets * max_load_factor) rehash();
+//   }
 
-  const int thread_id = Parallel::get_thread_id();
-  HashPendingNode<K, V>* pending_node_ptr = pending_nodes[thread_id].get();
-  while (pending_node_ptr != nullptr) {
-    if (pending_node_ptr->key == key) {
-      reducer(pending_node_ptr->value, value);
-      applied = true;
-    }
+//   const auto& pending_node_handler = [&](std::unique_ptr<HashPendingNode<K, V>>& node) {
+//     if (!node) {
+//       if (!applied) {
+//         node.reset(new HashPendingNode<K, V>(key, value));
+//       }
+//     } else {
+//       if (node->key == key) {
+//         reducer(node->value, value);
+//         applied = true;
+//       }
+//       if (node->tries > MAX_TRIES) return;
+//       node->backoff--;
+//       if (node->backoff == 0) {
+//         if (async_key_node_apply(key, hash_value, value, reducer)) {
+//           node = std::move(node->next);
+//         } else {
+//           node->tries++;
+//           node->backoff = get_backoff(node->tries);
+//         }
+//       }
+//     }
+//   };
 
-    pending_node_ptr = pending_node_ptr->next.get();
-  }
-  if (applied == false) {
-    
-  }
-  // if (!applied) {
-  //       pending_nodes.
-  // }
+//   const int thread_id = Parallel::get_thread_id();
+//   pending_node_apply_recursive(pending_nodes[thread_id], pending_node_handler);
 }
 
 template <class K, class V, class H>

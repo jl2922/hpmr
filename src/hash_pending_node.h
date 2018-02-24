@@ -11,14 +11,12 @@ class HashPendingNode {
 
   size_t hash_value;
 
-  unsigned short backoff;
+  int backoff;
 
   unsigned short tries;
 
-  std::unique_ptr<HashNode> next;
+  std::unique_ptr<HashPendingNode> next;
 
   HashPendingNode(const K& key, const V& value) : key(key), value(value){};
 
- private:
-  constexpr unsigned short MAX_TRIES = 5;
 };
