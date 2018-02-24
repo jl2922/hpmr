@@ -32,6 +32,11 @@ class DistMap {
       const V& value,
       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
 
+  void sync(
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::keep,
+      const bool verbose = false,
+      const int trunk_size = DEFAULT_TRUNK_SIZE);
+
   V get(const K& key, const V& default_value = V());
 
   void clear();
@@ -44,11 +49,6 @@ class DistMap {
           void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>& mapper,
       const std::function<void(VR&, const VR&)>& reducer,
       const bool verbose = false);
-
-  void sync(
-      const std::function<void(V&, const V&)>& reducer = Reducer<V>::keep,
-      const bool verbose = false,
-      const int trunk_size = DEFAULT_TRUNK_SIZE);
 
  private:
   double max_load_factor;
