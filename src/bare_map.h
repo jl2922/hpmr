@@ -77,9 +77,9 @@ class BareMap {
 
   void rehash();
 
-  void rehash(const size_t n_rehashing_buckets);
+  void rehash(const size_t n_rehash_buckets);
 
-  size_t get_n_rehashing_buckets(const size_t n_buckets_min) const;
+  size_t get_n_rehash_buckets(const size_t n_buckets_min) const;
 
   void key_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
@@ -126,8 +126,8 @@ BareMap<K, V, H>::BareMap(const BareMap<K, V, H>& m) {
 template <class K, class V, class H>
 void BareMap<K, V, H>::reserve(const size_t n_buckets_min) {
   if (n_buckets >= n_buckets_min) return;
-  const size_t n_rehashing_buckets = get_n_rehashing_buckets(n_buckets_min);
-  rehash(n_rehashing_buckets);
+  const size_t n_rehash_buckets = get_n_rehash_buckets(n_buckets_min);
+  rehash(n_rehash_buckets);
 };
 
 template <class K, class V, class H>
@@ -246,7 +246,7 @@ void BareMap<K, V, H>::all_node_apply_recursive(
     const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
     const double progress) {
   if (node) {
-    // Post-order traversal for rehashing.
+    // Post-order traversal for rehash.
     all_node_apply_recursive(node->next, node_handler, progress);
     node_handler(node, progress);
   }
@@ -259,28 +259,28 @@ void BareMap<K, V, H>::rehash() {
 }
 
 template <class K, class V, class H>
-void BareMap<K, V, H>::rehash(const size_t n_rehashing_buckets) {
-  if (n_buckets >= n_rehashing_buckets) return;
-  std::vector<std::unique_ptr<HashNode<K, V>>> rehashing_buckets(n_rehashing_buckets);
+void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
+  if (n_buckets >= n_rehash_buckets) return;
+  std::vector<std::unique_ptr<HashNode<K, V>>> rehash_buckets(n_rehash_buckets);
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
-    const auto& rehashing_node_handler = [&](std::unique_ptr<HashNode<K, V>>& rehashing_node) {
-      rehashing_node = std::move(node);
-      rehashing_node->next.reset();
+    const auto& rehash_node_handler = [&](std::unique_ptr<HashNode<K, V>>& rehash_node) {
+      rehash_node = std::move(node);
+      rehash_node->next.reset();
     };
     const K& key = node->key;
     const size_t hash_value = hasher(key);
-    const size_t bucket_id = hash_value % n_rehashing_buckets;
-    key_node_apply_recursive(rehashing_buckets[bucket_id], key, rehashing_node_handler);
+    const size_t bucket_id = hash_value % n_rehash_buckets;
+    key_node_apply_recursive(rehash_buckets[bucket_id], key, rehash_node_handler);
   };
   for (size_t i = 0; i < n_buckets; i++) {
     all_node_apply_recursive(buckets[i], node_handler);
   }
-  buckets = std::move(rehashing_buckets);
-  n_buckets = n_rehashing_buckets;
+  buckets = std::move(rehash_buckets);
+  n_buckets = n_rehash_buckets;
 }
 
 template <class K, class V, class H>
-size_t BareMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_min) const {
+size_t BareMap<K, V, H>::get_n_rehash_buckets(const size_t n_buckets_min) const {
   // Returns a number that is greater than or roughly equals to n_buckets_min.
   // That number is either a prime number or the product of several prime numbers.
   constexpr size_t PRIMES[] = {
@@ -290,10 +290,10 @@ size_t BareMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_min) con
   constexpr size_t BIG_PRIME = PRIMES[N_PRIMES - 5];
   size_t remaining_factor = n_buckets_min;
   remaining_factor += n_buckets_min / 4;
-  size_t n_rehashing_buckets = 1;
+  size_t n_rehash_buckets = 1;
   while (remaining_factor > LAST_PRIME) {
     remaining_factor /= BIG_PRIME;
-    n_rehashing_buckets *= BIG_PRIME;
+    n_rehash_buckets *= BIG_PRIME;
   }
 
   // Find a prime larger than or equal to the remaining factor with binary search.
@@ -306,8 +306,8 @@ size_t BareMap<K, V, H>::get_n_rehashing_buckets(const size_t n_buckets_min) con
       right = mid;
     }
   }
-  n_rehashing_buckets *= PRIMES[left];
-  return n_rehashing_buckets;
+  n_rehash_buckets *= PRIMES[left];
+  return n_rehash_buckets;
 }
 
 }  // namespace hpmr
