@@ -73,7 +73,7 @@ TEST(BareAsyncMapTest, Initialization) {
 
 TEST(BareAsyncMapTest, LargeParallelSetAndGet) {
   hpmr::BareAsyncMap<int, int> m;
-  constexpr int N_KEYS = 100000000;
+  constexpr int N_KEYS = 1000000;
   m.reserve(N_KEYS);
   std::hash<int> hasher;
 #pragma omp parallel for

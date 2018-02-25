@@ -149,7 +149,9 @@ void BareAsyncMap<K, V, H>::sync(const std::function<void(V&, const V&)>& reduce
     printf("t map %d : %zu\n", thread_id, thread_maps[thread_id].get_n_keys());
     thread_maps[thread_id].all_node_apply(node_handler);
     thread_maps[thread_id].clear();
+    printf("cleared\n");
   }
+  printf("synced\n");
 }
 
 // template <class K, class V, class H>
