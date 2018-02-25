@@ -1,3 +1,161 @@
+#pragma once
+
+#include <omp.h>
+#include <functional>
+#include "async_hasher.h"
+#include "bare_map.h"
+
+namespace hpmr {
+// A concurrent map that requires providing hash values when use.
+template <class K, class V, class H = std::hash<K>>
+class BareConcurrentMap {
+ public:
+  float max_load_factor;
+
+  BareConcurrentMap();
+
+  ~BareConcurrentMap();
+
+  void reserve(const size_t n_buckets_min);
+
+  size_t get_n_keys();
+
+  size_t get_n_buckets();
+
+  float get_load_factor();
+
+  void set(
+      const K& key,
+      const size_t hash_value,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
+  void async_set(
+      const K& key,
+      const size_t hash_value,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
+  void sync(const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
+
+  void unset(const K& key, const size_t hash_value);
+
+  V get(const K& key, const size_t hash_value, const V& default_value = V());
+
+  bool has(const K& key, const size_t hash_value);
+
+  void clear();
+
+  void clear_and_shrink();
+
+  // Apply node_handler to the hash node which has the specific key.
+  // If the key does not exist, apply to the unassociated node from the corresponding bucket.
+  // void key_node_apply(
+  //     const K& key,
+  //     const size_t hash_value,
+  //     const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
+
+  // // Apply node_handler to all the hash nodes.
+  // void all_node_apply(
+  //     const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler);
+
+  std::string to_string();
+
+  void from_string(const std::string& str);
+
+ private:
+  size_t n_threads;
+
+  size_t n_segments;
+
+  std::vector<omp_lock_t> segment_locks;
+
+  std::vector<BareMap<K, V, AsyncHasher<K, H>>> thread_caches;
+
+  std::vector<BareMap<K, V, AsyncHasher<K, H>>> segment_maps;
+
+  void lock_all_segments();
+
+  void unlock_all_segments();
+};
+
+template <class K, class V, class H>
+BareConcurrentMap<K, V, H>::BareConcurrentMap() {
+  max_load_factor = BareMap<K, V, H>::DEFAULT_MAX_LOAD_FACTOR;
+  n_threads = omp_get_max_threads();
+  thread_caches.resize(n_threads);
+  n_segments = n_threads * AsyncHasher<K, H>::N_SEGMENTS_PER_THREAD;
+  segment_maps.resize(n_segments);
+  segment_locks.resize(n_segments);
+  for (auto& lock : segment_locks) omp_init_lock(&lock);
+}
+
+template <class K, class V, class H>
+BareConcurrentMap<K, V, H>::~BareConcurrentMap() {
+  for (auto& lock : segment_locks) omp_destroy_lock(&lock);
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::reserve(const size_t n_buckets_min) {
+  const size_t n_segment_buckets_min = n_buckets_min / n_segments;
+  for (size_t i = 0; i < n_segments; i++) segment_maps[i].reserve(n_segment_buckets_min);
+  const size_t n_thread_buckets_est = n_buckets_min / 500;
+  for (size_t i = 0; i < n_threads; i++) thread_caches[i].reserve(n_thread_buckets_est);
+};
+
+template <class K, class V, class H>
+size_t BareConcurrentMap<K, V, H>::get_n_keys() {
+  size_t n_keys = 0;
+  for (size_t i = 0; i < n_segments; i++) n_keys += segment_maps[i].n_keys;
+  return n_keys;
+}
+
+template <class K, class V, class H>
+size_t BareConcurrentMap<K, V, H>::get_n_buckets() {
+  size_t n_buckets = 0;
+  for (size_t i = 0; i < n_segments; i++) n_buckets += segment_maps[i].get_n_buckets();
+  return n_buckets;
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::async_set(
+    const K& key,
+    const size_t hash_value,
+    const V& value,
+    const std::function<void(V&, const V&)>& reducer) {
+  const int thread_id = omp_get_thread_num();
+  const size_t async_hash_value = hash_value / n_segments;
+  const size_t segment_id = hash_value % n_segments;
+  auto& lock = segment_locks[segment_id];
+  if (omp_test_lock(&lock)) {
+    segment_maps[segment_id].set(key, async_hash_value, value, reducer);
+    omp_unset_lock(&lock);
+  } else {
+    thread_caches[thread_id].set(key, async_hash_value, value, reducer);
+  }
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::sync(const std::function<void(V&, const V&)>& reducer) {
+#pragma omp parallel
+  {
+    const int thread_id = omp_get_thread_num();
+    const auto& handler = [&](const K& key, const size_t hash_value, const V& value) {
+      const size_t segment_id = hash_value % n_segments;
+      auto& lock = segment_locks[segment_id];
+      omp_set_lock(&lock);
+      segment_maps[segment_id].set(key, hash_value, value, reducer);
+      omp_unset_lock(&lock);
+    };
+    printf("t map %d : %zu\n", thread_id, thread_caches[thread_id].n_keys);
+    thread_caches[thread_id].for_each(handler);
+    thread_caches[thread_id].clear();
+  }
+  printf("synced\n");
+}
+
+}  // namespace hpmr
+
 // #pragma once
 
 // #include <omp.h>
@@ -11,181 +169,6 @@
 // #include "reducer.h"
 
 // namespace hpmr {
-
-// // A concurrent map that requires providing hash values when use.
-// template <class K, class V, class H = std::hash<K>>
-// class BareConcurrentMap {
-//  public:
-//   BareConcurrentMap();
-
-//   BareConcurrentMap(const BareConcurrentMap& m);
-
-//   ~BareConcurrentMap();
-
-//   void reserve(const size_t n_buckets_min);
-
-//   size_t get_n_buckets() const { return n_buckets; };
-
-//   double get_load_factor() const { return static_cast<double>(n_keys) / n_buckets; }
-
-//   double get_max_load_factor() const { return max_load_factor; }
-
-//   void set_max_load_factor(const double max_load_factor) {
-//     this->max_load_factor = max_load_factor;
-//   }
-
-//   size_t get_n_keys() const { return n_keys; }
-
-//   void set(
-//       const K& key,
-//       const size_t hash_value,
-//       const V& value,
-//       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
-
-//   void async_set(
-//       const K& key,
-//       const size_t hash_value,
-//       const V& value,
-//       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
-
-//   void sync(const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite);
-
-//   void unset(const K& key, const size_t hash_value);
-
-//   void get(const K& key, const size_t hash_value, const std::function<void(const V&)>& handler);
-
-//   V get(const K& key, const size_t hash_value, const V& default_value = V());
-
-//   bool has(const K& key, const size_t hash_value);
-
-//   void clear();
-
-//   void clear_and_shrink();
-
-//   // Apply node_handler to the hash node which has the specific key.
-//   // If the key does not exist, apply to the unassociated node from the corresponding bucket.
-//   void key_node_apply(
-//       const K& key,
-//       const size_t hash_value,
-//       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
-
-//   // Apply node_handler to all the hash nodes.
-//   void all_node_apply(
-//       const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler);
-
-//   std::string to_string();
-
-//   void from_string(const std::string& str);
-
-//  private:
-//   size_t n_keys;
-
-//   size_t n_buckets;
-
-//   double max_load_factor;
-
-//   size_t n_segments;
-
-//   H hasher;
-
-//   std::vector<omp_lock_t> segment_locks;
-
-//   omp_lock_t rehash_entry_lock;
-
-//   // For parallel rehash (Require omp_set_nested(1)).
-//   std::vector<omp_lock_t> rehash_segment_locks;
-
-//   std::vector<std::unique_ptr<HashNode<K, V>>> buckets;
-
-//   std::vector<BareMap<K, V>> async_nodes;
-
-//   constexpr static size_t N_INITIAL_BUCKETS = 11;
-
-//   constexpr static size_t N_SEGMENTS_PER_THREAD = 7;
-
-//   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
-
-//   void rehash();
-
-//   void rehash(const size_t n_rehash_buckets);
-
-//   size_t get_n_rehash_buckets(const size_t n_buckets_min) const;
-
-//   void key_node_apply_recursive(
-//       std::unique_ptr<HashNode<K, V>>& node,
-//       const K& key,
-//       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
-
-//   // Recursively apply the handler in post-order.
-//   void all_node_apply_recursive(
-//       std::unique_ptr<HashNode<K, V>>& node,
-//       const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
-//       const double progress = 0.0);
-
-//   void lock_all_segments();
-
-//   void unlock_all_segments();
-// };
-
-// template <class K, class V, class H>
-// BareConcurrentMap<K, V, H>::BareConcurrentMap() {
-//   n_keys = 0;
-//   n_buckets = N_INITIAL_BUCKETS;
-//   buckets.resize(n_buckets);
-//   set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
-//   n_segments = Parallel::get_n_threads() * N_SEGMENTS_PER_THREAD;
-//   segment_locks.resize(n_segments);
-//   rehash_segment_locks.resize(n_segments);
-//   for (auto& lock : segment_locks) omp_init_lock(&lock);
-//   for (auto& lock : rehash_segment_locks) omp_init_lock(&lock);
-//   omp_init_lock(&rehash_entry_lock);
-//   omp_set_nested(1);  // For parallel rehash.
-// }
-
-// template <class K, class V, class H>
-// BareConcurrentMap<K, V, H>::BareConcurrentMap(const BareConcurrentMap<K, V, H>& m) {
-//   n_keys = m.n_keys;
-//   n_buckets = m.n_buckets;
-//   buckets.resize(n_buckets);
-//   max_load_factor = m.max_load_factor;
-//   n_segments = m.n_segments;
-// #pragma omp parallel for
-//   for (size_t i = 0; i < n_buckets; i++) {
-//     HashNode<K, V>* m_node_ptr = m.buckets[i].get();
-//     HashNode<K, V>* node_ptr = nullptr;
-//     while (m_node_ptr != nullptr) {
-//       if (node_ptr == nullptr) {  // Head node.
-//         buckets[i].reset(new HashNode<K, V>(m_node_ptr->key, m_node_ptr->value));
-//         node_ptr = buckets[i].get();
-//       } else {
-//         node_ptr->next.reset(new HashNode<K, V>(m_node_ptr->key, m_node_ptr->value));
-//         node_ptr = node_ptr->next.get();
-//       }
-//       m_node_ptr = m_node_ptr->next.get();
-//     }
-//   }
-//   segment_locks.resize(n_segments);
-//   rehash_segment_locks.resize(n_segments);
-//   for (auto& lock : segment_locks) omp_init_lock(&lock);
-//   for (auto& lock : rehash_segment_locks) omp_init_lock(&lock);
-//   omp_init_lock(&rehash_entry_lock);
-//   omp_set_nested(1);  // For parallel rehash.
-// }
-
-// template <class K, class V, class H>
-// BareConcurrentMap<K, V, H>::~BareConcurrentMap() {
-//   clear();
-//   for (auto& lock : segment_locks) omp_destroy_lock(&lock);
-//   for (auto& lock : rehash_segment_locks) omp_destroy_lock(&lock);
-//   omp_destroy_lock(&rehash_entry_lock);
-// }
-
-// template <class K, class V, class H>
-// void BareConcurrentMap<K, V, H>::reserve(const size_t n_buckets_min) {
-//   if (n_buckets >= n_buckets_min) return;
-//   const size_t n_rehash_buckets = get_n_rehash_buckets(n_buckets_min);
-//   rehash(n_rehash_buckets);
-// };
 
 // template <class K, class V, class H>
 // void BareConcurrentMap<K, V, H>::set(
@@ -286,7 +269,8 @@
 // }
 
 // template <class K, class V, class H>
-// V BareConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
+// V BareConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value)
+// {
 //   V value(default_value);
 //   const auto& node_handler = [&](const std::unique_ptr<HashNode<K, V>>& node) {
 //     if (node) value = node->value;

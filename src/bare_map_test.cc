@@ -57,9 +57,7 @@ TEST(BareMapTest, LargeSetAndGetSTLComparison) {
   std::unordered_map<int, int> m;
   m.reserve(N_KEYS);
   for (int i = 0; i < N_KEYS; i++) m[i] = i;
-  for (int i = 0; i < N_KEYS; i += 10) {
-    EXPECT_EQ(m[i], i);
-  }
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m[i], i);
 }
 
 TEST(BareMapTest, LargeSetAndGet) {
@@ -67,12 +65,23 @@ TEST(BareMapTest, LargeSetAndGet) {
   constexpr int N_KEYS = 1000000;
   m.reserve(N_KEYS);
   std::hash<int> hasher;
-  for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, hasher(i), i);
-  }
-  for (int i = 0; i < N_KEYS; i += 10) {
-    EXPECT_EQ(m.get(i, hasher(i)), i);
-  }
+  for (int i = 0; i < N_KEYS; i++) m.set(i, hasher(i), i);
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.get(i, hasher(i)), i);
+}
+
+TEST(BareMapTest, LargeAutoRehashSetAndGetSTLComparison) {
+  constexpr int N_KEYS = 1000000;
+  std::unordered_map<int, int> m;
+  for (int i = 0; i < N_KEYS; i++) m[i] = i;
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m[i], i);
+}
+
+TEST(BareMapTest, LargeAutoRehashSetAndGet) {
+  hpmr::BareMap<int, int> m;
+  constexpr int N_KEYS = 1000000;
+  std::hash<int> hasher;
+  for (int i = 0; i < N_KEYS; i++) m.set(i, hasher(i), i);
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.get(i, hasher(i)), i);
 }
 
 TEST(BareMapTest, UnsetAndHas) {

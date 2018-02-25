@@ -1,12 +1,18 @@
-// #include "bare_concurrent_map.h"
+#include "bare_concurrent_map.h"
 
-// #include <gtest/gtest.h>
-// #include "reducer.h"
+#include <gtest/gtest.h>
+#include "reducer.h"
 
-// TEST(BareConcurrentMapTest, Initialization) {
-//   hpmr::BareConcurrentMap<std::string, int> m;
-//   EXPECT_EQ(m.get_n_keys(), 0);
-// }
+TEST(BareConcurrentMapTest, Initialization) {
+  hpmr::BareConcurrentMap<std::string, int> m;
+  EXPECT_EQ(m.get_n_keys(), 0);
+}
+
+TEST(BareConcurrentMapTest, Reserve) {
+  hpmr::BareConcurrentMap<std::string, int> m;
+  m.reserve(1000);
+  EXPECT_GE(m.get_n_buckets(), 1000);
+}
 
 // TEST(BareConcurrentMapTest, CopyConstructor) {
 //   hpmr::BareConcurrentMap<std::string, int> m;
@@ -19,12 +25,6 @@
 //   hpmr::BareConcurrentMap<std::string, int> m2(m);
 //   EXPECT_EQ(m2.get("aa", hasher("aa")), 0);
 //   EXPECT_EQ(m2.get("bb", hasher("bb")), 1);
-// }
-
-// TEST(BareConcurrentMapTest, Reserve) {
-//   hpmr::BareConcurrentMap<std::string, int> m;
-//   m.reserve(100);
-//   EXPECT_GE(m.get_n_buckets(), 100);
 // }
 
 // TEST(BareConcurrentMapTest, LargeReserve) {
@@ -72,18 +72,19 @@
 //   EXPECT_GE(m.get_n_buckets(), N_KEYS);
 // }
 
-// TEST(BareConcurrentMapTest, LargeParallelSetAndRehash) {
-//   hpmr::BareConcurrentMap<int, int> m;
-//   std::hash<int> hasher;
-//   constexpr int N_KEYS = 1000000;
-//   m.reserve(N_KEYS);
-// #pragma omp parallel for
-//   for (int i = 0; i < N_KEYS; i++) {
-//     m.set(i, hasher(i), i);
-//   }
-//   EXPECT_EQ(m.get_n_keys(), N_KEYS);
-//   EXPECT_GE(m.get_n_buckets(), N_KEYS);
-// }
+TEST(BareConcurrentMapTest, LargeParallelSet) {
+  hpmr::BareConcurrentMap<int, int> m;
+  std::hash<int> hasher;
+  constexpr int N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+#pragma omp parallel for
+  for (int i = 0; i < N_KEYS; i++) {
+    m.async_set(i, hasher(i), i);
+  }
+  m.sync();
+  EXPECT_EQ(m.get_n_keys(), N_KEYS);
+  EXPECT_GE(m.get_n_buckets(), N_KEYS);
+}
 
 // // TEST(BareConcurrentMapTest, UnsetAndHas) {
 // //   hpmr::BareConcurrentMap<std::string, int> m;

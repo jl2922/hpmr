@@ -16,6 +16,8 @@ class BareMap {
 
   float max_load_factor;
 
+  constexpr static float DEFAULT_MAX_LOAD_FACTOR = 0.7;
+
   BareMap();
 
   void reserve(const size_t n_buckets_min);
@@ -38,16 +40,15 @@ class BareMap {
 
   void clear_and_shrink();
 
- private:
-  H hasher;
+  void for_each(
+      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler);
 
+ private:
   size_t n_buckets;
 
   std::vector<HashEntry<K, V>> buckets;
 
   constexpr static size_t N_INITIAL_BUCKETS = 11;
-
-  constexpr static float DEFAULT_MAX_LOAD_FACTOR = 0.7;
 
   size_t get_n_rehash_buckets(const size_t n_buckets_min);
 
@@ -223,5 +224,15 @@ void BareMap<K, V, H>::clear_and_shrink() {
   buckets.resize(N_INITIAL_BUCKETS);
   n_buckets = N_INITIAL_BUCKETS;
   clear();
+}
+
+template <class K, class V, class H>
+void BareMap<K, V, H>::for_each(
+    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
+  for (size_t i = 0; i < n_buckets; i++) {
+    if (buckets[i].filled) {
+      handler(buckets[i].key, buckets[i].hash_value, buckets[i].value);
+    }
+  }
 }
 }  // namespace hpmr
