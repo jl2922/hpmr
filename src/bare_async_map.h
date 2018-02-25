@@ -53,20 +53,20 @@ template <class K, class V, class H>
 BareAsyncMap<K, V, H>::BareAsyncMap() {
   n_threads_u = omp_get_max_threads();
   maps.resize(n_threads_u);
-  cache_maps.resize(n_threads_u);
-  for (size_t i = 0; i < n_threads_u; i++) {
-    cache_maps[i].resize(n_threads_u);
-  }
-  set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
+  // cache_maps.resize(n_threads_u);
+  // for (size_t i = 0; i < n_threads_u; i++) {
+  //   cache_maps[i].resize(n_threads_u);
+  // }
+  // set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
 }
 
 template <class K, class V, class H>
 void BareAsyncMap<K, V, H>::reserve(const size_t n_buckets_min) {
   for (size_t i = 0; i < n_threads_u; i++) {
     maps[i].reserve(n_buckets_min / n_threads_u);
-    for (size_t j = 0; j < n_threads_u; j++) {
-      cache_maps[i][j].reserve(n_buckets_min / n_threads_u / n_threads_u);
-    }
+    // for (size_t j = 0; j < n_threads_u; j++) {
+    //   cache_maps[i][j].reserve(n_buckets_min / n_threads_u / n_threads_u);
+    // }
   }
 }
 
@@ -109,7 +109,8 @@ void BareAsyncMap<K, V, H>::async_set(
   const int thread_id = omp_get_thread_num();
   const size_t dest_thread_id = hash_value % n_threads_u;
   const size_t async_hash_value = hash_value / n_threads_u;
-  cache_maps[thread_id][dest_thread_id].set(key, async_hash_value, value, reducer);
+  // cache_maps[thread_id][dest_thread_id].set(key, async_hash_value, value, reducer);
+  maps[thread_id].set(key, async_hash_value, value, reducer);
 }
 
 template <class K, class V, class H>
