@@ -28,6 +28,13 @@ TEST(BareMapTest, Reserve) {
   EXPECT_GE(m.get_n_buckets(), 100);
 }
 
+TEST(BareMapTest, LargeReserve) {
+  hpmr::BareMap<std::string, int> m;
+  const int N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+  EXPECT_GE(m.get_n_buckets(), N_KEYS);
+}
+
 TEST(BareMapTest, MaxLoadFactorAndAutoRehash) {
   hpmr::BareMap<int, int> m;
   constexpr int N_KEYS = 100;

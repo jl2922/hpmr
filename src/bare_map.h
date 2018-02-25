@@ -109,6 +109,7 @@ size_t BareMap<K, V, H>::get_n_rehash_buckets(const size_t n_buckets_min) {
 
 template <class K, class V, class H>
 void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
+  // printf("Rehash %zu to : %zu\n", n_buckets, n_rehash_buckets);
   std::vector<HashEntry<K, V>> rehash_buckets(n_rehash_buckets);
   for (size_t i = 0; i < n_buckets; i++) {
     if (!buckets[i].filled) continue;
@@ -239,6 +240,7 @@ void BareMap<K, V, H>::clear_and_shrink() {
 template <class K, class V, class H>
 void BareMap<K, V, H>::for_each(
     const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
+  if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
     if (buckets[i].filled) {
       handler(buckets[i].key, buckets[i].hash_value, buckets[i].value);

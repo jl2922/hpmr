@@ -27,13 +27,13 @@ TEST(BareConcurrentMapTest, Reserve) {
 //   EXPECT_EQ(m2.get("bb", hasher("bb")), 1);
 // }
 
-// TEST(BareConcurrentMapTest, LargeReserve) {
-//   hpmr::BareConcurrentMap<std::string, int> m;
-//   const size_t LARGE_N_BUCKETS = 1000000;
-//   m.reserve(LARGE_N_BUCKETS);
-//   const size_t n_buckets = m.get_n_buckets();
-//   EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
-// }
+TEST(BareConcurrentMapTest, LargeReserve) {
+  hpmr::BareConcurrentMap<std::string, int> m;
+  const size_t LARGE_N_BUCKETS = 1000000;
+  m.reserve(LARGE_N_BUCKETS);
+  const size_t n_buckets = m.get_n_buckets();
+  EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
+}
 
 // TEST(BareConcurrentMapTest, GetAndSetLoadFactor) {
 //   hpmr::BareConcurrentMap<int, int> m;
