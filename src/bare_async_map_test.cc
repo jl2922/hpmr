@@ -60,25 +60,25 @@ TEST(BareAsyncMapTest, Initialization) {
 //   EXPECT_EQ(m.get("cc", hasher("cc")), 2);
 // }
 
-TEST(BareAsyncMapTest, LargeSetAndGet) {
-  hpmr::BareAsyncMap<int, int> m;
-  constexpr int N_KEYS = 1000000;
-  m.reserve(N_KEYS);
-  std::hash<int> hasher;
-  for (int i = 0; i < N_KEYS; i++) {
-    m.async_set(i, hasher(i), i);
-  }
-  // m.sync();
-}
+// TEST(BareAsyncMapTest, LargeSetAndGet) {
+//   hpmr::BareAsyncMap<int, int> m;
+//   constexpr int N_KEYS = 1000000;
+//   m.reserve(N_KEYS);
+//   std::hash<int> hasher;
+//   for (int i = 0; i < N_KEYS; i++) {
+//     m.async_set(i, hasher(i), i);
+//   }
+//   m.sync();
+// }
 
 TEST(BareAsyncMapTest, LargeParallelSetAndGet) {
   hpmr::BareAsyncMap<int, int> m;
-  constexpr int N_KEYS = 1000000;
+  constexpr int N_KEYS = 100000000;
   m.reserve(N_KEYS);
   std::hash<int> hasher;
 #pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
     m.async_set(i, hasher(i), i);
   }
-  // m.sync();
+  m.sync();
 }

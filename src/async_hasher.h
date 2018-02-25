@@ -7,13 +7,15 @@ namespace hpmr {
 template <class K, class H>
 class AsyncHasher {
  public:
-  AsyncHasher() { n_threads_u = omp_get_max_threads(); }
+  AsyncHasher() { n_segments = omp_get_max_threads() * N_SEGMENTS_PER_THREAD; }
 
-  size_t operator()(const K& key) const { return hasher(key) / n_threads_u; }
+  size_t operator()(const K& key) const { return hasher(key) / n_segments; }
+
+  constexpr static size_t N_SEGMENTS_PER_THREAD = 32;
 
  private:
   H hasher;
 
-  size_t n_threads_u;
+  size_t n_segments;
 };
 }  // namespace hpmr

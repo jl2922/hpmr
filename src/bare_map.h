@@ -21,11 +21,11 @@ class BareMap {
 
   size_t get_n_buckets() const { return n_buckets; };
 
-  double get_load_factor() const { return static_cast<double>(n_keys) / n_buckets; }
+  float get_load_factor() const { return static_cast<float>(n_keys) / n_buckets; }
 
-  double get_max_load_factor() const { return max_load_factor; }
+  float get_max_load_factor() const { return max_load_factor; }
 
-  void set_max_load_factor(const double max_load_factor) {
+  void set_max_load_factor(const float max_load_factor) {
     this->max_load_factor = max_load_factor;
   }
 
@@ -58,14 +58,14 @@ class BareMap {
 
   // Apply node_handler to all the hash nodes.
   void all_node_apply(
-      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler);
+      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const float)>& node_handler);
 
  private:
   size_t n_keys;
 
   size_t n_buckets;
 
-  double max_load_factor;
+  float max_load_factor;
 
   H hasher;
 
@@ -73,7 +73,7 @@ class BareMap {
 
   constexpr static size_t N_INITIAL_BUCKETS = 17;
 
-  constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
+  constexpr static float DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
   void rehash();
 
@@ -90,8 +90,8 @@ class BareMap {
   // Recursively apply the handler in post-order.
   void all_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
-      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
-      const double progress = 0.0);
+      const std::function<void(std::unique_ptr<HashNode<K, V>>&, const float)>& node_handler,
+      const float progress = 0.0);
 };
 
 template <class K, class V, class H>
@@ -220,8 +220,8 @@ void BareMap<K, V, H>::key_node_apply(
 
 template <class K, class V, class H>
 void BareMap<K, V, H>::all_node_apply(
-    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler) {
-  const double progress_factor = 100.0 / n_buckets;
+    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const float)>& node_handler) {
+  const float progress_factor = 100.0 / n_buckets;
   for (size_t i = 0; i < n_buckets; i++) {
     all_node_apply_recursive(buckets[i], node_handler, i * progress_factor);
   }
@@ -247,8 +247,8 @@ void BareMap<K, V, H>::key_node_apply_recursive(
 template <class K, class V, class H>
 void BareMap<K, V, H>::all_node_apply_recursive(
     std::unique_ptr<HashNode<K, V>>& node,
-    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const double)>& node_handler,
-    const double progress) {
+    const std::function<void(std::unique_ptr<HashNode<K, V>>&, const float)>& node_handler,
+    const float progress) {
   if (node) {
     // Post-order traversal for rehash.
     all_node_apply_recursive(node->next, node_handler, progress);
@@ -266,7 +266,7 @@ template <class K, class V, class H>
 void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
   if (n_buckets >= n_rehash_buckets) return;
   std::vector<std::unique_ptr<HashNode<K, V>>> rehash_buckets(n_rehash_buckets);
-  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const float) {
     const auto& rehash_node_handler = [&](std::unique_ptr<HashNode<K, V>>& rehash_node) {
       rehash_node = std::move(node);
       rehash_node->next.reset();

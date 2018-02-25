@@ -61,22 +61,22 @@ TEST(BareMapTest, SetAndGet) {
   m.get("cc", hasher("cc"), [](const int value) { EXPECT_EQ(value, 3); });
 }
 
-TEST(BareMapTest, LargeSetAndGetSTLComparison) {
-  constexpr int N_KEYS = 1000000;
-  std::unordered_map<int, int> m;
-  m.reserve(N_KEYS);
-  for (int i = 0; i < N_KEYS; i++) m[i] = i;
-}
+// TEST(BareMapTest, LargeSetAndGetSTLComparison) {
+//   constexpr int N_KEYS = 1000000;
+//   std::unordered_map<int, int> m;
+//   m.reserve(N_KEYS);
+//   for (int i = 0; i < N_KEYS; i++) m[i] = i;
+// }
 
-TEST(BareMapTest, LargeSetAndGet) {
-  hpmr::BareMap<int, int> m;
-  constexpr int N_KEYS = 1000000;
-  m.reserve(N_KEYS);
-  std::hash<int> hasher;
-  for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, hasher(i), i);
-  }
-}
+// TEST(BareMapTest, LargeSetAndGet) {
+//   hpmr::BareMap<int, int> m;
+//   constexpr int N_KEYS = 1000000;
+//   m.reserve(N_KEYS);
+//   std::hash<int> hasher;
+//   for (int i = 0; i < N_KEYS; i++) {
+//     m.set(i, hasher(i), i);
+//   }
+// }
 
 TEST(BareMapTest, UnsetAndHas) {
   hpmr::BareMap<std::string, int> m;

@@ -1,5 +1,5 @@
 # Default options.
-CXX := mpic++
+CXX := mpiicpc
 CXX_WARNING_OPTIONS := -Wall -Wextra
 CXXFLAGS := -std=c++11 -O3 -g -fopenmp $(CXX_WARNING_OPTIONS)
 LDLIBS := -pthread -lpthread
