@@ -6,7 +6,7 @@
 
 TEST(BareMapTest, Initialization) {
   hpmr::BareMap<std::string, int> m;
-  EXPECT_EQ(m.get_n_keys(), 0);
+  EXPECT_EQ(m.n_keys, 0);
 }
 
 TEST(BareMapTest, CopyConstructor) {
@@ -28,19 +28,10 @@ TEST(BareMapTest, Reserve) {
   EXPECT_GE(m.get_n_buckets(), 100);
 }
 
-TEST(BareMapTest, LargeReserve) {
-  hpmr::BareMap<std::string, int> m;
-  const size_t LARGE_N_BUCKETS = 1000000;
-  m.reserve(LARGE_N_BUCKETS);
-  const size_t n_buckets = m.get_n_buckets();
-  EXPECT_GE(n_buckets, LARGE_N_BUCKETS);
-}
-
-TEST(BareMapTest, GetAndSetLoadFactor) {
+TEST(BareMapTest, MaxLoadFactorAndAutoRehash) {
   hpmr::BareMap<int, int> m;
   constexpr int N_KEYS = 100;
-  m.set_max_load_factor(0.5);
-  EXPECT_EQ(m.get_max_load_factor(), 0.5);
+  m.max_load_factor = 0.5;
   std::hash<int> hasher;
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, hasher(i), i);
@@ -58,25 +49,31 @@ TEST(BareMapTest, SetAndGet) {
   m.set("aa", hasher("aa"), 2, hpmr::Reducer<int>::sum);
   EXPECT_EQ(m.get("aa", hasher("aa")), 3);
   m.set("cc", hasher("cc"), 3, hpmr::Reducer<int>::sum);
-  m.get("cc", hasher("cc"), [](const int value) { EXPECT_EQ(value, 3); });
+  EXPECT_EQ(m.get("cc", hasher("cc")), 3);
 }
 
-// TEST(BareMapTest, LargeSetAndGetSTLComparison) {
-//   constexpr int N_KEYS = 1000000;
-//   std::unordered_map<int, int> m;
-//   m.reserve(N_KEYS);
-//   for (int i = 0; i < N_KEYS; i++) m[i] = i;
-// }
+TEST(BareMapTest, LargeSetAndGetSTLComparison) {
+  constexpr int N_KEYS = 1000000;
+  std::unordered_map<int, int> m;
+  m.reserve(N_KEYS);
+  for (int i = 0; i < N_KEYS; i++) m[i] = i;
+  for (int i = 0; i < N_KEYS; i += 10) {
+    EXPECT_EQ(m[i], i);
+  }
+}
 
-// TEST(BareMapTest, LargeSetAndGet) {
-//   hpmr::BareMap<int, int> m;
-//   constexpr int N_KEYS = 1000000;
-//   m.reserve(N_KEYS);
-//   std::hash<int> hasher;
-//   for (int i = 0; i < N_KEYS; i++) {
-//     m.set(i, hasher(i), i);
-//   }
-// }
+TEST(BareMapTest, LargeSetAndGet) {
+  hpmr::BareMap<int, int> m;
+  constexpr int N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+  std::hash<int> hasher;
+  for (int i = 0; i < N_KEYS; i++) {
+    m.set(i, hasher(i), i);
+  }
+  for (int i = 0; i < N_KEYS; i += 10) {
+    EXPECT_EQ(m.get(i, hasher(i)), i);
+  }
+}
 
 TEST(BareMapTest, UnsetAndHas) {
   hpmr::BareMap<std::string, int> m;
@@ -87,15 +84,34 @@ TEST(BareMapTest, UnsetAndHas) {
   EXPECT_TRUE(m.has("bbb", hasher("bbb")));
   m.unset("aa", hasher("aa"));
   EXPECT_FALSE(m.has("aa", hasher("aa")));
-  EXPECT_EQ(m.get_n_keys(), 1);
+  EXPECT_EQ(m.n_keys, 1);
 
   m.unset("not_exist_key", hasher("not_exist_key"));
-  EXPECT_EQ(m.get_n_keys(), 1);
+  EXPECT_EQ(m.n_keys, 1);
 
   m.unset("bbb", hasher("bbb"));
   EXPECT_FALSE(m.has("aa", hasher("aa")));
   EXPECT_FALSE(m.has("bbb", hasher("bbb")));
-  EXPECT_EQ(m.get_n_keys(), 0);
+  EXPECT_EQ(m.n_keys, 0);
+
+  hpmr::BareMap<int, int> m2;
+  constexpr int N_KEYS = 100;
+  m2.max_load_factor = 0.99;
+  m2.reserve(N_KEYS);
+  std::hash<int> hasher2;
+  for (int i = 0; i < N_KEYS; i++) {
+    m2.set(i * i, hasher2(i * i), i);
+  }
+  for (int i = 0; i < N_KEYS; i += 3) {
+    m2.unset(i * i, hasher2(i * i));
+  }
+  for (int i = 0; i < N_KEYS; i++) {
+    if (i % 3 == 0) {
+      EXPECT_FALSE(m2.get(i * i, hasher2(i * i)));
+    } else {
+      EXPECT_TRUE(m2.get(i * i, hasher2(i * i)));
+    }
+  }
 }
 
 TEST(BareMapTest, Clear) {
@@ -103,9 +119,9 @@ TEST(BareMapTest, Clear) {
   std::hash<std::string> hasher;
   m.set("aa", hasher("aa"), 1);
   m.set("bbb", hasher("bbb"), 2);
-  EXPECT_EQ(m.get_n_keys(), 2);
+  EXPECT_EQ(m.n_keys, 2);
   m.clear();
-  EXPECT_EQ(m.get_n_keys(), 0);
+  EXPECT_EQ(m.n_keys, 0);
 }
 
 TEST(BareMapTest, ClearAndShrink) {
@@ -115,9 +131,9 @@ TEST(BareMapTest, ClearAndShrink) {
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, hasher(i), i);
   }
-  EXPECT_EQ(m.get_n_keys(), N_KEYS);
-  EXPECT_GE(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
+  EXPECT_EQ(m.n_keys, N_KEYS);
+  EXPECT_GE(m.get_n_buckets(), N_KEYS * m.max_load_factor);
   m.clear_and_shrink();
-  EXPECT_EQ(m.get_n_keys(), 0);
-  EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
+  EXPECT_EQ(m.n_keys, 0);
+  EXPECT_LT(m.get_n_buckets(), N_KEYS * m.max_load_factor);
 }

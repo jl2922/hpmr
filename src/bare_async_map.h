@@ -85,7 +85,7 @@ void BareAsyncMap<K, V, H>::reserve(const size_t n_buckets_min) {
 template <class K, class V, class H>
 size_t BareAsyncMap<K, V, H>::get_n_keys() {
   size_t n_keys = 0;
-  for (size_t i = 0; i < n_segments; i++) n_keys += segment_maps[i].get_n_keys();
+  for (size_t i = 0; i < n_segments; i++) n_keys += segment_maps[i].n_keys;
   return n_keys;
 }
 
@@ -105,10 +105,10 @@ template <class K, class V, class H>
 void BareAsyncMap<K, V, H>::set_max_load_factor(const float max_load_factor) {
   this->max_load_factor = max_load_factor;
   for (size_t i = 0; i < n_threads; i++) {
-    thread_maps[i].set_max_load_factor(max_load_factor);
+    thread_maps[i].max_load_factor = max_load_factor;
   }
   for (size_t i = 0; i < n_segments; i++) {
-    segment_maps[i].set_max_load_factor(max_load_factor);
+    segment_maps[i].max_load_factor = max_load_factor;
   }
 }
 
@@ -122,12 +122,27 @@ void BareAsyncMap<K, V, H>::async_set(
   const size_t async_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = locks[segment_id];
-  if (omp_test_lock(&lock)) {
-    segment_maps[segment_id].set(key, async_hash_value, value, reducer);
-    omp_unset_lock(&lock);
-  } else {
-    thread_maps[thread_id].set(key, async_hash_value, value, reducer);
-  }
+  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
+    if (omp_test_lock(&lock)) {
+      if (!node) {
+        node.reset(new HashNode<K, V>(key, hash_value, value));
+        segment_maps[segment_id].n_keys++;
+      } else {
+        reducer(node->value, value);
+      }
+      omp_unset_lock(&lock);
+    } else {
+      thread_maps[thread_id].set(key, async_hash_value, value, reducer);
+    }
+  };
+  segment_maps[segment_id].key_node_apply(key, async_hash_value, node_handler);
+  // if (omp_test_lock(&lock)) {
+  //   segment_maps[segment_id].set(key, async_hash_value, value, reducer);
+  //   segment_maps[segment_id].key_node_apply(key, async_hash_value, node_handler);
+  //   omp_unset_lock(&lock);
+  // } else {
+  //   thread_maps[thread_id].set(key, async_hash_value, value, reducer);
+  // }
 }
 
 template <class K, class V, class H>
@@ -146,7 +161,7 @@ void BareAsyncMap<K, V, H>::sync(const std::function<void(V&, const V&)>& reduce
       segment_maps[segment_id].set(key, hash_value, value, reducer);
       omp_unset_lock(&lock);
     };
-    printf("t map %d : %zu\n", thread_id, thread_maps[thread_id].get_n_keys());
+    printf("t map %d : %zu\n", thread_id, thread_maps[thread_id].n_keys);
     thread_maps[thread_id].all_node_apply(node_handler);
     thread_maps[thread_id].clear();
     printf("cleared\n");
