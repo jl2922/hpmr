@@ -71,7 +71,7 @@ class BareMap {
 
   std::vector<std::unique_ptr<HashNode<K, V>>> buckets;
 
-  constexpr static size_t N_INITIAL_BUCKETS = 11;
+  constexpr static size_t N_INITIAL_BUCKETS = 17;
 
   constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
 
@@ -84,6 +84,7 @@ class BareMap {
   void key_node_apply_recursive(
       std::unique_ptr<HashNode<K, V>>& node,
       const K& key,
+      const size_t hash_value,
       const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler);
 
   // Recursively apply the handler in post-order.
@@ -112,10 +113,12 @@ BareMap<K, V, H>::BareMap(const BareMap<K, V, H>& m) {
     HashNode<K, V>* node_ptr = nullptr;
     while (m_node_ptr != nullptr) {
       if (node_ptr == nullptr) {  // Head node.
-        buckets[i].reset(new HashNode<K, V>(m_node_ptr->key, m_node_ptr->value));
+        buckets[i].reset(
+            new HashNode<K, V>(m_node_ptr->key, m_node_ptr->hash_value, m_node_ptr->value));
         node_ptr = buckets[i].get();
       } else {
-        node_ptr->next.reset(new HashNode<K, V>(m_node_ptr->key, m_node_ptr->value));
+        node_ptr->next.reset(
+            new HashNode<K, V>(m_node_ptr->key, m_node_ptr->hash_value, m_node_ptr->value));
         node_ptr = node_ptr->next.get();
       }
       m_node_ptr = m_node_ptr->next.get();
@@ -138,7 +141,7 @@ void BareMap<K, V, H>::set(
     const std::function<void(V&, const V&)>& reducer) {
   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node) {
     if (!node) {
-      node.reset(new HashNode<K, V>(key, value));
+      node.reset(new HashNode<K, V>(key, hash_value, value));
       n_keys++;
     } else {
       reducer(node->value, value);
@@ -212,7 +215,7 @@ void BareMap<K, V, H>::key_node_apply(
     const size_t hash_value,
     const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler) {
   const size_t bucket_id = hash_value % n_buckets;
-  key_node_apply_recursive(buckets[bucket_id], key, node_handler);
+  key_node_apply_recursive(buckets[bucket_id], key, hash_value, node_handler);
 }
 
 template <class K, class V, class H>
@@ -228,12 +231,13 @@ template <class K, class V, class H>
 void BareMap<K, V, H>::key_node_apply_recursive(
     std::unique_ptr<HashNode<K, V>>& node,
     const K& key,
+    const size_t hash_value,
     const std::function<void(std::unique_ptr<HashNode<K, V>>&)>& node_handler) {
   if (node) {
-    if (node->key == key) {
+    if (node->hash_value == hash_value && node->key == key) {
       node_handler(node);
     } else {
-      key_node_apply_recursive(node->next, key, node_handler);
+      key_node_apply_recursive(node->next, key, hash_value, node_handler);
     }
   } else {
     node_handler(node);
@@ -268,9 +272,9 @@ void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
       rehash_node->next.reset();
     };
     const K& key = node->key;
-    const size_t hash_value = hasher(key);
+    const size_t hash_value = node->hash_value;
     const size_t bucket_id = hash_value % n_rehash_buckets;
-    key_node_apply_recursive(rehash_buckets[bucket_id], key, rehash_node_handler);
+    key_node_apply_recursive(rehash_buckets[bucket_id], key, hash_value, rehash_node_handler);
   };
   for (size_t i = 0; i < n_buckets; i++) {
     all_node_apply_recursive(buckets[i], node_handler);

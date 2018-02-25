@@ -49,9 +49,8 @@ GTEST_API_ int main(int argc, char** argv) {
   // MPI_Init(nullptr, nullptr);
   // int proc_id;
   // MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-  // if (proc_id != 0) {
-  //   if (!freopen("/dev/null", "w", stdout)) throw std::runtime_error("unable to mute slaves.\n");
-  // }
+
+
   std::cout << "Running main() from gmock_main.cc\n";
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's

@@ -70,7 +70,7 @@ TEST(BareMapTest, LargeSetAndGetSTLComparison) {
 
 TEST(BareMapTest, LargeSetAndGet) {
   hpmr::BareMap<int, int> m;
-  constexpr int N_KEYS = 10000000;
+  constexpr int N_KEYS = 1000000;
   m.reserve(N_KEYS);
   std::hash<int> hasher;
   for (int i = 0; i < N_KEYS; i++) {
