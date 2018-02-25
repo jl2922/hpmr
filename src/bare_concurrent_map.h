@@ -16,7 +16,7 @@ class BareConcurrentMap {
 
   ~BareConcurrentMap();
 
-  void reserve(const size_t n_buckets_min);
+  void reserve(const size_t n_keys_min);
 
   size_t get_n_keys();
 
@@ -70,9 +70,9 @@ class BareConcurrentMap {
 
   std::vector<omp_lock_t> segment_locks;
 
-  std::vector<BareMap<K, V, AsyncHasher<K, H>>> thread_caches;
+  std::vector<BareMap<K, V, H>> thread_caches;
 
-  std::vector<BareMap<K, V, AsyncHasher<K, H>>> segment_maps;
+  std::vector<BareMap<K, V, AsyncHasher<K, H>>> segments;
 
   void lock_all_segments();
 
@@ -85,7 +85,7 @@ BareConcurrentMap<K, V, H>::BareConcurrentMap() {
   n_threads = omp_get_max_threads();
   thread_caches.resize(n_threads);
   n_segments = n_threads * AsyncHasher<K, H>::N_SEGMENTS_PER_THREAD;
-  segment_maps.resize(n_segments);
+  segments.resize(n_segments);
   segment_locks.resize(n_segments);
   for (auto& lock : segment_locks) omp_init_lock(&lock);
 }
@@ -96,24 +96,24 @@ BareConcurrentMap<K, V, H>::~BareConcurrentMap() {
 }
 
 template <class K, class V, class H>
-void BareConcurrentMap<K, V, H>::reserve(const size_t n_buckets_min) {
-  const size_t n_segment_buckets_min = n_buckets_min / n_segments;
-  for (size_t i = 0; i < n_segments; i++) segment_maps[i].reserve(n_segment_buckets_min);
-  const size_t n_thread_buckets_est = n_buckets_min / 500;
-  for (size_t i = 0; i < n_threads; i++) thread_caches[i].reserve(n_thread_buckets_est);
+void BareConcurrentMap<K, V, H>::reserve(const size_t n_keys_min) {
+  const size_t n_segment_keys_min = n_keys_min / n_segments;
+  for (size_t i = 0; i < n_segments; i++) segments[i].reserve(n_segment_keys_min);
+  const size_t n_thread_keys_est = n_keys_min / 1000;
+  for (size_t i = 0; i < n_threads; i++) thread_caches[i].reserve(n_thread_keys_est);
 };
 
 template <class K, class V, class H>
 size_t BareConcurrentMap<K, V, H>::get_n_keys() {
   size_t n_keys = 0;
-  for (size_t i = 0; i < n_segments; i++) n_keys += segment_maps[i].n_keys;
+  for (size_t i = 0; i < n_segments; i++) n_keys += segments[i].n_keys;
   return n_keys;
 }
 
 template <class K, class V, class H>
 size_t BareConcurrentMap<K, V, H>::get_n_buckets() {
   size_t n_buckets = 0;
-  for (size_t i = 0; i < n_segments; i++) n_buckets += segment_maps[i].get_n_buckets();
+  for (size_t i = 0; i < n_segments; i++) n_buckets += segments[i].get_n_buckets();
   return n_buckets;
 }
 
@@ -128,10 +128,10 @@ void BareConcurrentMap<K, V, H>::async_set(
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   if (omp_test_lock(&lock)) {
-    segment_maps[segment_id].set(key, async_hash_value, value, reducer);
+    segments[segment_id].set(key, async_hash_value, value, reducer);
     omp_unset_lock(&lock);
   } else {
-    thread_caches[thread_id].set(key, async_hash_value, value, reducer);
+    thread_caches[thread_id].set(key, hash_value, value, reducer);
   }
 }
 
@@ -142,16 +142,15 @@ void BareConcurrentMap<K, V, H>::sync(const std::function<void(V&, const V&)>& r
     const int thread_id = omp_get_thread_num();
     const auto& handler = [&](const K& key, const size_t hash_value, const V& value) {
       const size_t segment_id = hash_value % n_segments;
+      const size_t async_hash_value = hash_value / n_segments;
       auto& lock = segment_locks[segment_id];
       omp_set_lock(&lock);
-      segment_maps[segment_id].set(key, hash_value, value, reducer);
+      segments[segment_id].set(key, async_hash_value, value, reducer);
       omp_unset_lock(&lock);
     };
-    printf("t map %d : %zu\n", thread_id, thread_caches[thread_id].n_keys);
     thread_caches[thread_id].for_each(handler);
     thread_caches[thread_id].clear();
   }
-  printf("synced\n");
 }
 
 }  // namespace hpmr

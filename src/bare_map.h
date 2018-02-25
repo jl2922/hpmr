@@ -20,7 +20,9 @@ class BareMap {
 
   BareMap();
 
-  void reserve(const size_t n_buckets_min);
+  void reserve(const size_t n_keys_min);
+
+  void reserve_n_buckets(const size_t n_buckets_min);
 
   size_t get_n_buckets() { return n_buckets; }
 
@@ -50,6 +52,8 @@ class BareMap {
 
   constexpr static size_t N_INITIAL_BUCKETS = 11;
 
+  constexpr static size_t MAX_N_PROBES = 64;
+
   size_t get_n_rehash_buckets(const size_t n_buckets_min);
 
   void rehash(const size_t n_rehash_buckets);
@@ -64,10 +68,15 @@ BareMap<K, V, H>::BareMap() {
 }
 
 template <class K, class V, class H>
-void BareMap<K, V, H>::reserve(const size_t n_keys_min) {
-  if (n_keys_min <= n_buckets * max_load_factor) return;
-  const size_t n_rehash_buckets = get_n_rehash_buckets(n_keys_min / max_load_factor);
+void BareMap<K, V, H>::reserve_n_buckets(const size_t n_buckets_min) {
+  if (n_buckets_min <= n_buckets) return;
+  const size_t n_rehash_buckets = get_n_rehash_buckets(n_buckets_min);
   rehash(n_rehash_buckets);
+}
+
+template <class K, class V, class H>
+void BareMap<K, V, H>::reserve(const size_t n_keys_min) {
+  reserve_n_buckets(n_keys_min / max_load_factor);
 }
 
 template <class K, class V, class H>
@@ -133,7 +142,7 @@ void BareMap<K, V, H>::set(
     if (!buckets[bucket_id].filled) {
       buckets[bucket_id].fill(key, hash_value, value);
       n_keys++;
-      if (n_buckets * max_load_factor <= n_keys) reserve(n_keys * 2);
+      if (n_buckets * max_load_factor <= n_keys) reserve_n_buckets(n_buckets * 2);
       break;
     } else if (buckets[bucket_id].hash_value == hash_value && buckets[bucket_id].key == key) {
       reducer(buckets[bucket_id].value, value);
@@ -144,6 +153,7 @@ void BareMap<K, V, H>::set(
     }
   }
   assert(n_probes < n_buckets);
+  if (n_probes > MAX_N_PROBES) reserve_n_buckets(n_buckets * 2);
 }
 
 template <class K, class V, class H>
