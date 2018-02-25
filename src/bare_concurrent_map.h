@@ -2,8 +2,8 @@
 
 #include <omp.h>
 #include <functional>
-#include "async_hasher.h"
 #include "bare_map.h"
+#include "segment_hasher.h"
 
 namespace hpmr {
 // A concurrent map that requires providing hash values when use.
@@ -72,7 +72,7 @@ class BareConcurrentMap {
 
   std::vector<BareMap<K, V, H>> thread_caches;
 
-  std::vector<BareMap<K, V, AsyncHasher<K, H>>> segments;
+  std::vector<BareMap<K, V, SegmentHasher<K, H>>> segments;
 
   void lock_all_segments();
 
@@ -84,7 +84,7 @@ BareConcurrentMap<K, V, H>::BareConcurrentMap() {
   max_load_factor = BareMap<K, V, H>::DEFAULT_MAX_LOAD_FACTOR;
   n_threads = omp_get_max_threads();
   thread_caches.resize(n_threads);
-  n_segments = n_threads * AsyncHasher<K, H>::N_SEGMENTS_PER_THREAD;
+  n_segments = n_threads * SegmentHasher<K, H>::N_SEGMENTS_PER_THREAD;
   segments.resize(n_segments);
   segment_locks.resize(n_segments);
   for (auto& lock : segment_locks) omp_init_lock(&lock);
@@ -123,16 +123,31 @@ void BareConcurrentMap<K, V, H>::async_set(
     const size_t hash_value,
     const V& value,
     const std::function<void(V&, const V&)>& reducer) {
-  const int thread_id = omp_get_thread_num();
-  const size_t async_hash_value = hash_value / n_segments;
+  const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   if (omp_test_lock(&lock)) {
-    segments[segment_id].set(key, async_hash_value, value, reducer);
+    segments[segment_id].set(key, segment_hash_value, value, reducer);
     omp_unset_lock(&lock);
   } else {
+    const int thread_id = omp_get_thread_num();
     thread_caches[thread_id].set(key, hash_value, value, reducer);
   }
+}
+
+template <class K, class V, class H>
+void BareConcurrentMap<K, V, H>::set(
+    const K& key,
+    const size_t hash_value,
+    const V& value,
+    const std::function<void(V&, const V&)>& reducer) {
+  const int thread_id = omp_get_thread_num();
+  const size_t segment_hash_value = hash_value / n_segments;
+  const size_t segment_id = hash_value % n_segments;
+  auto& lock = segment_locks[segment_id];
+  omp_set_lock(&lock);
+  segments[segment_id].set(key, segment_hash_value, value, reducer);
+  omp_unset_lock(&lock);
 }
 
 template <class K, class V, class H>
@@ -142,10 +157,10 @@ void BareConcurrentMap<K, V, H>::sync(const std::function<void(V&, const V&)>& r
     const int thread_id = omp_get_thread_num();
     const auto& handler = [&](const K& key, const size_t hash_value, const V& value) {
       const size_t segment_id = hash_value % n_segments;
-      const size_t async_hash_value = hash_value / n_segments;
+      const size_t segment_hash_value = hash_value / n_segments;
       auto& lock = segment_locks[segment_id];
       omp_set_lock(&lock);
-      segments[segment_id].set(key, async_hash_value, value, reducer);
+      segments[segment_id].set(key, segment_hash_value, value, reducer);
       omp_unset_lock(&lock);
     };
     thread_caches[thread_id].for_each(handler);
