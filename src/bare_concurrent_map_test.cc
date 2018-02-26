@@ -76,7 +76,7 @@ TEST(BareConcurrentMapTest, LargeParallelSet) {
   hpmr::BareConcurrentMap<int, int> m;
   std::hash<int> hasher;
   constexpr int N_KEYS = 1000000;
-  m.reserve(N_KEYS);
+  // m.reserve(N_KEYS);
 #pragma omp parallel for schedule(static, 1)
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, hasher(i), i);
@@ -88,8 +88,8 @@ TEST(BareConcurrentMapTest, LargeParallelSet) {
 TEST(BareConcurrentMapTest, LargeParallelAsyncSet) {
   hpmr::BareConcurrentMap<int, int> m;
   std::hash<int> hasher;
-  constexpr int N_KEYS = 1000000;
-  m.reserve(N_KEYS);
+  constexpr int N_KEYS = 100000000;
+  // m.reserve(N_KEYS);
 #pragma omp parallel for schedule(static, 1)
   for (int i = 0; i < N_KEYS; i++) {
     m.async_set(i, hasher(i), i);
