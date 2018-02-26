@@ -11,7 +11,7 @@ class SegmentHasher {
 
   size_t operator()(const K& key) const { return hasher(key) / n_segments; }
 
-  constexpr static size_t N_SEGMENTS_PER_THREAD = 16;
+  constexpr static size_t N_SEGMENTS_PER_THREAD = 8;
 
  private:
   H hasher;

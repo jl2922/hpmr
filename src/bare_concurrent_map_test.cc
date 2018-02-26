@@ -1,6 +1,8 @@
 #include "bare_concurrent_map.h"
 
 #include <gtest/gtest.h>
+#include <string>
+#include <unordered_map>
 #include "reducer.h"
 
 TEST(BareConcurrentMapTest, Initialization) {
@@ -72,27 +74,42 @@ TEST(BareConcurrentMapTest, LargeReserve) {
 //   EXPECT_GE(m.get_n_buckets(), N_KEYS);
 // }
 
-TEST(BareConcurrentMapTest, LargeParallelSet) {
-  hpmr::BareConcurrentMap<int, int> m;
-  std::hash<int> hasher;
+TEST(BareConcurrentMapTest, LargeParallelSetIndependentSTLComparison) {
+  const int n_threads = omp_get_max_threads();
+  std::unordered_map<std::string, int> m[n_threads];
   constexpr int N_KEYS = 1000000;
-  // m.reserve(N_KEYS);
-#pragma omp parallel for schedule(static, 1)
+  for (int i = 0; i < n_threads; i++) m[i].reserve(N_KEYS / n_threads);
+#pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, hasher(i), i);
+    const auto& key = std::to_string(i);
+    const int thread_id = omp_get_thread_num();
+    m[thread_id][key] = i;
+  }
+}
+
+TEST(BareConcurrentMapTest, LargeParallelSet) {
+  hpmr::BareConcurrentMap<std::string, int> m;
+  std::hash<std::string> hasher;
+  constexpr int N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+#pragma omp parallel for
+  for (int i = 0; i < N_KEYS; i++) {
+    const auto& key = std::to_string(i);
+    m.set(key, hasher(key), i);
   }
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS);
 }
 
 TEST(BareConcurrentMapTest, LargeParallelAsyncSet) {
-  hpmr::BareConcurrentMap<int, int> m;
-  std::hash<int> hasher;
-  constexpr int N_KEYS = 100000000;
-  // m.reserve(N_KEYS);
-#pragma omp parallel for schedule(static, 1)
+  hpmr::BareConcurrentMap<std::string, int> m;
+  std::hash<std::string> hasher;
+  constexpr int N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+#pragma omp parallel for
   for (int i = 0; i < N_KEYS; i++) {
-    m.async_set(i, hasher(i), i);
+    const auto& key = std::to_string(i);
+    m.async_set(key, hasher(key), i);
   }
   m.sync();
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
