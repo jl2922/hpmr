@@ -3,11 +3,11 @@
 #include <cassert>
 #include <functional>
 #include <vector>
+#include "../hps/src/hps.h"
 #include "hash_entry.h"
 #include "reducer.h"
 
 namespace hpmr {
-
 // A linear probing hash map that requires providing hash values when use.
 template <class K, class V, class H = std::hash<K>>
 class BareMap {
@@ -15,6 +15,10 @@ class BareMap {
   size_t n_keys;
 
   float max_load_factor;
+
+  size_t n_buckets;
+
+  std::vector<HashEntry<K, V>> buckets;
 
   constexpr static float DEFAULT_MAX_LOAD_FACTOR = 0.7;
 
@@ -46,10 +50,6 @@ class BareMap {
       const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler);
 
  private:
-  size_t n_buckets;
-
-  std::vector<HashEntry<K, V>> buckets;
-
   constexpr static size_t N_INITIAL_BUCKETS = 11;
 
   constexpr static size_t MAX_N_PROBES = 64;
@@ -109,7 +109,6 @@ size_t BareMap<K, V, H>::get_n_rehash_buckets(const size_t n_buckets_min) {
 
 template <class K, class V, class H>
 void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
-  // printf("Rehash %zu to : %zu\n", n_buckets, n_rehash_buckets);
   std::vector<HashEntry<K, V>> rehash_buckets(n_rehash_buckets);
   for (size_t i = 0; i < n_buckets; i++) {
     if (!buckets[i].filled) continue;
@@ -224,6 +223,7 @@ bool BareMap<K, V, H>::has(const K& key, const size_t hash_value) {
 
 template <class K, class V, class H>
 void BareMap<K, V, H>::clear() {
+  if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
     buckets[i].filled = false;
   }

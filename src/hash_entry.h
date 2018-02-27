@@ -1,5 +1,6 @@
 #pragma once
 
+namespace hpmr {
 template <class K, class V>
 class HashEntry {
  public:
@@ -12,9 +13,6 @@ class HashEntry {
   bool filled;
 
   HashEntry() : filled(false){};
-
-  HashEntry(const K& key, const size_t hash_value, const V& value)
-      : key(key), hash_value(hash_value), value(value), filled(true){};
 
   void fill(const K& key, const size_t hash_value, const V& value) {
     this->key = key;
@@ -35,3 +33,4 @@ class HashEntry {
     return *this;
   }
 };
+}  // namespace hpmr

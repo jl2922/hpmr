@@ -1,4 +1,5 @@
 #include "bare_map.h"
+#include "bare_map_serializer.h"
 
 #include <gtest/gtest.h>
 #include <unordered_map>
@@ -152,4 +153,17 @@ TEST(BareMapTest, ClearAndShrink) {
   m.clear_and_shrink();
   EXPECT_EQ(m.n_keys, 0);
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.max_load_factor);
+}
+
+TEST(BareMapTest, ToAndFromString) {
+  hpmr::BareMap<std::string, int> m1;
+  std::hash<std::string> hasher;
+  m1.set("aa", hasher("aa"), 1);
+  m1.set("bbb", hasher("bbb"), 2);
+  const std::string serialized = hps::serialize_to_string(m1);
+  hpmr::BareMap<std::string, int> m2;
+  hps::parse_from_string(m2, serialized);
+  EXPECT_EQ(m2.n_keys, 2);
+  EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
+  EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
 }
