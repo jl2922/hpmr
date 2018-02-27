@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 #include <string>
 #include <unordered_map>
-#include "bare_map_serializer.h"
 #include "reducer.h"
 
 TEST(BareConcurrentMapTest, Initialization) {

@@ -3,6 +3,7 @@
 #include <omp.h>
 #include <functional>
 #include "bare_map.h"
+#include "bare_map_serializer.h"
 #include "segment_hasher.h"
 
 namespace hpmr {
@@ -231,7 +232,7 @@ std::string BareConcurrentMap<K, V, H>::to_string() {
   for (size_t i = 0; i < n_segments; i++) {
     auto& lock = segment_locks[i];
     omp_set_lock(&lock);
-    ostrs[i] = hps::serialize_to_string(segments.at(i));
+    hps::serialize_to_string(segments.at(i), ostrs.at(i));
     omp_unset_lock(&lock);
 #pragma omp atomic
     total_size += ostrs[i].size();
@@ -267,7 +268,7 @@ void BareConcurrentMap<K, V, H>::from_string(const std::string& str) {
 template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::for_each(
     const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
-#pragma omp paralell for
+#pragma omp parallel for
   for (size_t i = 0; i < n_segments; i++) {
     segments.at(i).for_each(handler);
   }

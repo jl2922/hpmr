@@ -46,17 +46,16 @@ GTEST_API_ int _tmain(int argc, TCHAR** argv) {
 #else
 GTEST_API_ int main(int argc, char** argv) {
 #endif  // GTEST_OS_WINDOWS_MOBILE
-  // MPI_Init(nullptr, nullptr);
-  // int proc_id;
-  // MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-
-
+  MPI_Init(nullptr, nullptr);
+  int proc_id;
+  MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
+  if (proc_id != 0) freopen("/dev/null", "w", stdout);
   std::cout << "Running main() from gmock_main.cc\n";
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's
   // no need for calling testing::InitGoogleTest() separately.
   testing::InitGoogleMock(&argc, argv);
   auto res = RUN_ALL_TESTS();
-  // MPI_Finalize();
+  MPI_Finalize();
   return res;
 }

@@ -5,7 +5,6 @@
 #include <functional>
 #include "bare_concurrent_map.h"
 #include "dist_hasher.h"
-#include "parallel.h"
 #include "reducer.h"
 
 namespace hpmr {
@@ -15,17 +14,17 @@ class DistMap {
  public:
   DistMap();
 
-  void reserve(const size_t n_buckets_min);
+  void reserve(const size_t n_keys_min);
+
+  size_t get_n_keys();
 
   size_t get_n_buckets();
 
-  double get_load_factor();
+  float get_load_factor();
 
-  double get_max_load_factor() const { return max_load_factor; }
+  float get_max_load_factor() const { return max_load_factor; }
 
-  void set_max_load_factor(const double max_load_factor);
-
-  size_t get_n_keys();
+  void set_max_load_factor(const float max_load_factor);
 
   void async_set(
       const K& key,
@@ -51,61 +50,39 @@ class DistMap {
       const bool verbose = false);
 
  private:
-  double max_load_factor;
+  int n_procs;
 
-  size_t n_procs_u;
-
-  size_t proc_id_u;
+  int proc_id;
 
   H hasher;
+
+  float max_load_factor;
 
   BareConcurrentMap<K, V, DistHasher<K, H>> local_map;
 
   std::vector<BareConcurrentMap<K, V, DistHasher<K, H>>> remote_maps;
 
-  constexpr static double DEFAULT_MAX_LOAD_FACTOR = 1.0;
-
   constexpr static int DEFAULT_TRUNK_SIZE = 1 << 20;
 
   std::vector<int> generate_shuffled_procs();
 
-  int get_base_id(const std::vector<int>& shuffled_procs);
+  int get_shuffled_id(const std::vector<int>& shuffled_procs);
 };
 
 template <class K, class V, class H>
 DistMap<K, V, H>::DistMap() {
-  n_procs_u = static_cast<size_t>(Parallel::get_n_procs());
-  proc_id_u = static_cast<size_t>(Parallel::get_proc_id());
-  remote_maps.resize(n_procs_u);
-  set_max_load_factor(DEFAULT_MAX_LOAD_FACTOR);
+  MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
+  remote_maps.resize(n_procs);
+  max_load_factor = local_map.get_max_load_factor();
 }
 
 template <class K, class V, class H>
-void DistMap<K, V, H>::reserve(const size_t n_buckets_min) {
-  local_map.reserve(n_buckets_min / n_procs_u);
+void DistMap<K, V, H>::reserve(const size_t n_keys_min) {
+  local_map.reserve(n_keys_min / n_procs);
   for (auto& remote_map : remote_maps) {
-    remote_map.reserve(n_buckets_min / n_procs_u / n_procs_u);
+    remote_map.reserve(n_keys_min / n_procs / n_procs);
   }
-}
-
-template <class K, class V, class H>
-size_t DistMap<K, V, H>::get_n_buckets() {
-  const size_t local_n_buckets = local_map.get_n_buckets();
-  size_t n_buckets;
-  MPI_Allreduce(&local_n_buckets, &n_buckets, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
-  return n_buckets;
-}
-
-template <class K, class V, class H>
-double DistMap<K, V, H>::get_load_factor() {
-  return static_cast<double>(get_n_buckets()) / get_n_keys();
-}
-
-template <class K, class V, class H>
-void DistMap<K, V, H>::set_max_load_factor(const double max_load_factor) {
-  this->max_load_factor = max_load_factor;
-  local_map.set_max_load_factor(max_load_factor);
-  for (auto& remote_map : remote_maps) remote_map.set_max_load_factor(max_load_factor);
 }
 
 template <class K, class V, class H>
@@ -117,29 +94,148 @@ size_t DistMap<K, V, H>::get_n_keys() {
 }
 
 template <class K, class V, class H>
+size_t DistMap<K, V, H>::get_n_buckets() {
+  const size_t local_n_buckets = local_map.get_n_buckets();
+  size_t n_buckets;
+  MPI_Allreduce(&local_n_buckets, &n_buckets, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
+  return n_buckets;
+}
+
+template <class K, class V, class H>
+float DistMap<K, V, H>::get_load_factor() {
+  return static_cast<float>(get_n_buckets()) / get_n_keys();
+}
+
+template <class K, class V, class H>
+void DistMap<K, V, H>::set_max_load_factor(const float max_load_factor) {
+  this->max_load_factor = max_load_factor;
+  local_map.set_max_load_factor(max_load_factor);
+  for (auto& remote_map : remote_maps) remote_map.set_max_load_factor(max_load_factor);
+}
+
+template <class K, class V, class H>
 void DistMap<K, V, H>::async_set(
     const K& key, const V& value, const std::function<void(V&, const V&)>& reducer) {
   const size_t hash_value = hasher(key);
+  const size_t n_procs_u = static_cast<size_t>(n_procs);
   const size_t dest_proc_id = hash_value % n_procs_u;
-  const size_t map_hash_value = hash_value / n_procs_u;
-  if (dest_proc_id == proc_id_u) {
-    local_map.set(key, map_hash_value, value, reducer);
+  const size_t dist_hash_value = hash_value / n_procs_u;
+  if (dest_proc_id == static_cast<size_t>(proc_id)) {
+    local_map.async_set(key, dist_hash_value, value, reducer);
   } else {
-    remote_maps[dest_proc_id].set(key, map_hash_value, value, reducer);
+    remote_maps[dest_proc_id].async_set(key, dist_hash_value, value, reducer);
   }
 }
 
 template <class K, class V, class H>
 V DistMap<K, V, H>::get(const K& key, const V& default_value) {
+  // TODO: support non numerical V with type traits specialization.
   const size_t hash_value = hasher(key);
+  const size_t n_procs_u = static_cast<size_t>(n_procs);
   const size_t dest_proc_id = hash_value % n_procs_u;
-  const size_t map_hash_value = hash_value / n_procs_u;
+  const size_t dist_hash_value = hash_value / n_procs_u;
   V res;
-  if (dest_proc_id == proc_id_u) {
-    res = local_map.get(key, map_hash_value, default_value);
+  if (dest_proc_id == static_cast<size_t>(proc_id)) {
+    res = local_map.get(key, dist_hash_value, default_value);
   }
   MPI_Bcast(&res, 1, MpiType<V>::value, dest_proc_id, MPI_COMM_WORLD);
   return res;
+}
+
+template <class K, class V, class H>
+void DistMap<K, V, H>::sync(
+    const std::function<void(V&, const V&)>& reducer, const bool verbose, const int trunk_size) {
+  assert(trunk_size > 0);
+  const bool report = proc_id == 0 && verbose;
+  if (report) printf("Syncing: ");
+
+  const auto& node_handler = [&](const K& key, const size_t hash_value, const V& value) {
+    local_map.async_set(key, hash_value, value, reducer);
+  };
+
+  // Accelerate overall network transfer through randomization.
+  const auto& shuffled_procs = generate_shuffled_procs();
+  const int shuffled_id = get_shuffled_id(shuffled_procs);
+
+  std::string send_buf;
+  std::string recv_buf;
+  char send_buf_char[trunk_size];
+  char recv_buf_char[trunk_size];
+  MPI_Request reqs[2];
+  MPI_Status stats[2];
+  for (int i = 1; i < n_procs; i++) {
+    const int dest_proc_id = shuffled_procs[(shuffled_id + i) % n_procs];
+    const int src_proc_id = shuffled_procs[(shuffled_id + n_procs - i) % n_procs];
+    remote_maps[dest_proc_id].sync(reducer);
+    send_buf = remote_maps[dest_proc_id].to_string();
+    remote_maps[dest_proc_id].clear();
+    size_t send_cnt = send_buf.size();
+    size_t recv_cnt;
+    MPI_Irecv(&recv_cnt, 1, MpiType<size_t>::value, src_proc_id, 0, MPI_COMM_WORLD, &reqs[0]);
+    MPI_Isend(&send_cnt, 1, MpiType<size_t>::value, dest_proc_id, 0, MPI_COMM_WORLD, &reqs[1]);
+    MPI_Waitall(2, reqs, stats);
+    size_t send_pos = 0;
+    size_t recv_pos = 0;
+    recv_buf.clear();
+    recv_buf.reserve(recv_cnt);
+    const size_t trunk_size_u = static_cast<size_t>(trunk_size);
+    while (send_pos < send_cnt || recv_pos < recv_cnt) {
+      const int recv_trunk_cnt =
+          (recv_cnt - recv_pos >= trunk_size_u) ? trunk_size : recv_cnt - recv_pos;
+      const int send_trunk_cnt =
+          (send_cnt - send_pos >= trunk_size_u) ? trunk_size : send_cnt - send_pos;
+      if (recv_trunk_cnt > 0) {
+        MPI_Irecv(
+            recv_buf_char, recv_trunk_cnt, MPI_CHAR, src_proc_id, 1, MPI_COMM_WORLD, &reqs[0]);
+        recv_pos += recv_trunk_cnt;
+      }
+      if (send_trunk_cnt > 0) {
+        send_buf.copy(send_buf_char, send_trunk_cnt, send_pos);
+        MPI_Issend(
+            send_buf_char, send_trunk_cnt, MPI_CHAR, dest_proc_id, 1, MPI_COMM_WORLD, &reqs[1]);
+        send_pos += send_trunk_cnt;
+      }
+      MPI_Waitall(2, reqs, stats);
+      recv_buf.append(recv_buf_char, recv_trunk_cnt);
+    }
+    remote_maps[dest_proc_id].from_string(recv_buf);
+    remote_maps[dest_proc_id].for_each(node_handler);
+    remote_maps[dest_proc_id].clear();
+    if (report) printf("%d/%d ", i, n_procs - 1);
+  }
+  local_map.sync();
+  if (report) printf("#\n");
+}
+
+template <class K, class V, class H>
+std::vector<int> DistMap<K, V, H>::generate_shuffled_procs() {
+  std::vector<int> res(n_procs);
+
+  if (proc_id == 0) {
+    // Fisher–Yates shuffle algorithm.
+    for (int i = 0; i < n_procs; i++) res[i] = i;
+    srand(time(0));
+    for (int i = res.size() - 1; i > 0; i--) {
+      const int j = rand() % (i + 1);
+      if (i != j) {
+        const int tmp = res[i];
+        res[i] = res[j];
+        res[j] = tmp;
+      }
+    }
+  }
+
+  MPI_Bcast(res.data(), n_procs, MPI_INT, 0, MPI_COMM_WORLD);
+
+  return res;
+}
+
+template <class K, class V, class H>
+int DistMap<K, V, H>::get_shuffled_id(const std::vector<int>& shuffled_procs) {
+  for (int i = 0; i < n_procs; i++) {
+    if (shuffled_procs[i] == proc_id) return i;
+  }
+  throw std::runtime_error("proc id does not exist in shuffled procs.");
 }
 
 template <class K, class V, class H>
@@ -162,130 +258,24 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
     const std::function<void(VR&, const VR&)>& reducer,
     const bool verbose) {
   DistMap<KR, VR, HR> res;
-  const int proc_id = Parallel::get_proc_id();
-  const int n_procs = Parallel::get_n_procs();
-  const int n_threads = Parallel::get_n_threads();
-  double target_progress = 0.1;
 
-  const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
-  if (verbose && proc_id == 0) {
-    printf("MapReduce on %d node(s) (%d threads each node):\nMapping: ", n_procs, n_threads);
+  const bool report = verbose && proc_id == 0;
+  if (report) {
+    const int n_threads = omp_get_max_threads();
+    printf("MapReduce on %d (%dx) node(s):\nMapping: ", n_procs, n_threads);
   }
 
-  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
-    mapper(node->key, node->value, emit);
-    const int thread_id = Parallel::get_thread_id();
-    if (verbose && proc_id == 0 && thread_id == 0) {
-      while (target_progress <= progress) {
-        printf("%.1f%% ", target_progress);
-        target_progress *= 2;
-      }
-    }
+  const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
+  const auto& node_handler = [&](const K& key, const size_t, const V& value) {
+    mapper(key, value, emit);
   };
-  local_map.all_node_apply(node_handler);
-  if (verbose && proc_id == 0) printf("#\n");
+  local_map.for_each(node_handler);
+
+  if (report) printf("#\n");
 
   res.sync(reducer, verbose);
 
   return res;
-}
-
-template <class K, class V, class H>
-void DistMap<K, V, H>::sync(
-    const std::function<void(V&, const V&)>& reducer, const bool verbose, const int trunk_size) {
-  assert(trunk_size > 0);
-  const int n_procs = Parallel::get_n_procs();
-
-  if (verbose && Parallel::is_master()) printf("Syncing: ");
-
-  const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double) {
-    local_map.set(node->key, hasher(node->key) / n_procs_u, node->value, reducer);
-  };
-
-  // Accelerate overall network transfer through randomization.
-  const auto& shuffled_procs = generate_shuffled_procs();
-  const int base_id = get_base_id(shuffled_procs);
-
-  std::string send_buf;
-  std::string recv_buf;
-  char send_buf_char[trunk_size];
-  char recv_buf_char[trunk_size];
-  MPI_Request reqs[2];
-  MPI_Status stats[2];
-  for (int i = 1; i < n_procs; i++) {
-    const int dest_proc_id = shuffled_procs[(base_id + i) % n_procs];
-    const int src_proc_id = shuffled_procs[(base_id + n_procs - i) % n_procs];
-    send_buf = remote_maps[dest_proc_id].to_string();
-    remote_maps[dest_proc_id].clear();
-    size_t send_cnt = send_buf.size();
-    size_t recv_cnt;
-    MPI_Irecv(&recv_cnt, 1, MpiType<size_t>::value, src_proc_id, 0, MPI_COMM_WORLD, &reqs[0]);
-    MPI_Isend(&send_cnt, 1, MpiType<size_t>::value, dest_proc_id, 0, MPI_COMM_WORLD, &reqs[1]);
-    MPI_Waitall(2, reqs, stats);
-    size_t send_pos = 0;
-    size_t recv_pos = 0;
-    recv_buf.clear();
-    recv_buf.reserve(recv_cnt);
-    const size_t trunk_size_u = static_cast<size_t>(trunk_size);
-    while (send_pos < send_cnt || recv_pos < recv_cnt) {
-      const int recv_trunk_cnt =
-          (recv_cnt - recv_pos >= trunk_size_u) ? trunk_size : recv_cnt - recv_pos;
-      const int send_trunk_cnt =
-          (send_cnt - send_pos >= trunk_size_u) ? trunk_size : send_cnt - send_pos;
-      if (recv_pos < recv_cnt) {
-        MPI_Irecv(
-            recv_buf_char, recv_trunk_cnt, MPI_CHAR, src_proc_id, 1, MPI_COMM_WORLD, &reqs[0]);
-        recv_pos += recv_trunk_cnt;
-      }
-      if (send_pos < send_cnt) {
-        send_buf.copy(send_buf_char, send_trunk_cnt, send_pos);
-        MPI_Issend(
-            send_buf_char, send_trunk_cnt, MPI_CHAR, dest_proc_id, 1, MPI_COMM_WORLD, &reqs[1]);
-        send_pos += send_trunk_cnt;
-      }
-      MPI_Waitall(2, reqs, stats);
-      recv_buf.append(recv_buf_char, recv_trunk_cnt);
-    }
-    remote_maps[dest_proc_id].from_string(recv_buf);
-    remote_maps[dest_proc_id].all_node_apply(node_handler);
-    remote_maps[dest_proc_id].clear_and_shrink();
-    if (verbose && Parallel::is_master()) printf("%d/%d ", i, n_procs - 1);
-  }
-  if (verbose && Parallel::is_master()) printf("#\n");
-}
-
-template <class K, class V, class H>
-std::vector<int> DistMap<K, V, H>::generate_shuffled_procs() {
-  const int n_procs = Parallel::get_n_procs();
-  std::vector<int> res(n_procs);
-
-  if (Parallel::is_master()) {
-    // Fisher–Yates shuffle algorithm.
-    for (int i = 0; i < n_procs; i++) res[i] = i;
-    srand(time(0));
-    for (int i = res.size() - 1; i > 0; i--) {
-      const int j = rand() % (i + 1);
-      if (i != j) {
-        const int tmp = res[i];
-        res[i] = res[j];
-        res[j] = tmp;
-      }
-    }
-  }
-
-  MPI_Bcast(res.data(), n_procs, MPI_INT, 0, MPI_COMM_WORLD);
-
-  return res;
-}
-
-template <class K, class V, class H>
-int DistMap<K, V, H>::get_base_id(const std::vector<int>& shuffled_procs) {
-  const int n_procs = Parallel::get_n_procs();
-  const int proc_id = Parallel::get_proc_id();
-  for (int i = 0; i < n_procs; i++) {
-    if (shuffled_procs[i] == proc_id) return i;
-  }
-  throw std::runtime_error("proc id not found in shuffled procs.");
 }
 
 }  // namespace hpmr

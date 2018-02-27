@@ -153,7 +153,10 @@ void BareMap<K, V, H>::set(
     }
   }
   assert(n_probes < n_buckets);
-  if (n_probes > MAX_N_PROBES) reserve_n_buckets(n_buckets * 2);
+  if (n_probes > MAX_N_PROBES) {
+    reserve_n_buckets(n_buckets * 2);
+    // TODO: Check hash inbalance.
+  }
 }
 
 template <class K, class V, class H>
