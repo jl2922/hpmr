@@ -156,9 +156,9 @@ TEST(BareConcurrentMapTest, ToAndFromString) {
   m1.set("aa", hasher("aa"), 1);
   m1.set("bbb", hasher("bbb"), 2);
   const std::string serialized = m1.to_string();
-  // hpmr::BareConcurrentMap<std::string, int> m2;
-  // m2.from_string(serialized);
-  // EXPECT_EQ(m2.get_n_keys(), 2);
-  // EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
-  // EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
+  hpmr::BareConcurrentMap<std::string, int> m2;
+  m2.from_string(serialized);
+  EXPECT_EQ(m2.get_n_keys(), 2);
+  EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
+  EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
 }

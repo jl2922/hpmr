@@ -111,13 +111,13 @@ template <class K, class V, class H>
 void BareMap<K, V, H>::rehash(const size_t n_rehash_buckets) {
   std::vector<HashEntry<K, V>> rehash_buckets(n_rehash_buckets);
   for (size_t i = 0; i < n_buckets; i++) {
-    if (!buckets[i].filled) continue;
-    const size_t hash_value = buckets[i].hash_value;
+    if (!buckets.at(i).filled) continue;
+    const size_t hash_value = buckets.at(i).hash_value;
     size_t rehash_bucket_id = hash_value % n_rehash_buckets;
     size_t n_probes = 0;
     while (n_probes < n_rehash_buckets) {
-      if (!rehash_buckets[rehash_bucket_id].filled) {
-        rehash_buckets[rehash_bucket_id] = buckets[i];
+      if (!rehash_buckets.at(rehash_bucket_id).filled) {
+        rehash_buckets.at(rehash_bucket_id) = buckets.at(i);
         break;
       } else {
         n_probes++;
@@ -139,13 +139,13 @@ void BareMap<K, V, H>::set(
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
-    if (!buckets[bucket_id].filled) {
-      buckets[bucket_id].fill(key, hash_value, value);
+    if (!buckets.at(bucket_id).filled) {
+      buckets.at(bucket_id).fill(key, hash_value, value);
       n_keys++;
       if (n_buckets * max_load_factor <= n_keys) reserve_n_buckets(n_buckets * 2);
       break;
-    } else if (buckets[bucket_id].hash_value == hash_value && buckets[bucket_id].key == key) {
-      reducer(buckets[bucket_id].value, value);
+    } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
+      reducer(buckets.at(bucket_id).value, value);
       break;
     } else {
       n_probes++;
@@ -161,10 +161,10 @@ V BareMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
-    if (!buckets[bucket_id].filled) {
+    if (!buckets.at(bucket_id).filled) {
       return default_value;
-    } else if (buckets[bucket_id].hash_value == hash_value && buckets[bucket_id].key == key) {
-      return buckets[bucket_id].value;
+    } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
+      return buckets.at(bucket_id).value;
     } else {
       n_probes++;
       bucket_id = (bucket_id + 1) % n_buckets;
@@ -178,20 +178,20 @@ void BareMap<K, V, H>::unset(const K& key, const size_t hash_value) {
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
-    if (!buckets[bucket_id].filled) {
+    if (!buckets.at(bucket_id).filled) {
       return;
-    } else if (buckets[bucket_id].hash_value == hash_value && buckets[bucket_id].key == key) {
-      buckets[bucket_id].filled = false;
+    } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
+      buckets.at(bucket_id).filled = false;
       n_keys--;
       // Find a valid entry to fill the spot if exists.
       size_t swap_bucket_id = (bucket_id + 1) % n_buckets;
-      while (buckets[swap_bucket_id].filled) {
-        const size_t swap_origin_id = buckets[swap_bucket_id].hash_value % n_buckets;
+      while (buckets.at(swap_bucket_id).filled) {
+        const size_t swap_origin_id = buckets.at(swap_bucket_id).hash_value % n_buckets;
         if ((swap_bucket_id < swap_origin_id && swap_origin_id <= bucket_id) ||
             (swap_origin_id <= bucket_id && bucket_id < swap_bucket_id) ||
             (bucket_id < swap_bucket_id && swap_bucket_id < swap_origin_id)) {
-          buckets[bucket_id] = buckets[swap_bucket_id];
-          buckets[swap_bucket_id].filled = false;
+          buckets.at(bucket_id) = buckets.at(swap_bucket_id);
+          buckets.at(swap_bucket_id).filled = false;
           bucket_id = swap_bucket_id;
         }
         swap_bucket_id = (swap_bucket_id + 1) % n_buckets;
@@ -209,9 +209,9 @@ bool BareMap<K, V, H>::has(const K& key, const size_t hash_value) {
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
-    if (!buckets[bucket_id].filled) {
+    if (!buckets.at(bucket_id).filled) {
       return false;
-    } else if (buckets[bucket_id].hash_value == hash_value && buckets[bucket_id].key == key) {
+    } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
       return true;
     } else {
       n_probes++;
@@ -225,7 +225,7 @@ template <class K, class V, class H>
 void BareMap<K, V, H>::clear() {
   if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
-    buckets[i].filled = false;
+    buckets.at(i).filled = false;
   }
   n_keys = 0;
 }
@@ -242,8 +242,8 @@ void BareMap<K, V, H>::for_each(
     const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
   if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
-    if (buckets[i].filled) {
-      handler(buckets[i].key, buckets[i].hash_value, buckets[i].value);
+    if (buckets.at(i).filled) {
+      handler(buckets.at(i).key, buckets.at(i).hash_value, buckets.at(i).value);
     }
   }
 }
