@@ -59,6 +59,7 @@ TEST(DistMapTest, ClearAndShrink) {
   for (int i = 0; i < N_KEYS; i++) {
     m.async_set(std::to_string(i), i);
   }
+  m.get_n_keys();
   m.sync();
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());

@@ -54,9 +54,13 @@ class BareMap {
 
   constexpr static size_t MAX_N_PROBES = 64;
 
+  bool unbalanced_warned;
+
   size_t get_n_rehash_buckets(const size_t n_buckets_min);
 
   void rehash(const size_t n_rehash_buckets);
+
+  void check_balance();
 };
 
 template <class K, class V, class H>
@@ -65,6 +69,7 @@ BareMap<K, V, H>::BareMap() {
   n_buckets = N_INITIAL_BUCKETS;
   buckets.resize(N_INITIAL_BUCKETS);
   max_load_factor = DEFAULT_MAX_LOAD_FACTOR;
+  unbalanced_warned = false;
 }
 
 template <class K, class V, class H>
@@ -154,8 +159,14 @@ void BareMap<K, V, H>::set(
   }
   assert(n_probes < n_buckets);
   if (n_probes > MAX_N_PROBES) {
+    if (n_keys < n_buckets / 4 && !unbalanced_warned) {
+      fprintf(stderr, "Warning: Hash table is unbalanced!\n");
+      unbalanced_warned = true;
+    }
+    if (n_keys < n_buckets / 16) {
+      throw std::runtime_error("Hash table is severely unbalanced.");
+    }
     reserve_n_buckets(n_buckets * 2);
-    // TODO: Check hash inbalance.
   }
 }
 

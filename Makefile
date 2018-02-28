@@ -45,7 +45,7 @@ test: $(TEST_EXE)
 	./$(TEST_EXE)
 
 test_mpi: $(TEST_EXE)
-	mpirun -n 4 ./$(TEST_EXE) --gtest_filter=DistMapTest.*
+	mpirun -n 4 ./$(TEST_EXE) # --gtest_filter=DistMapTest.ClearAndShrink
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -20,17 +20,5 @@ class HashEntry {
     this->value = value;
     filled = true;
   }
-
-  HashEntry& operator=(const HashEntry<K, V>& entry) {
-    if (entry.filled) {
-      key = entry.key;
-      hash_value = entry.hash_value;
-      value = entry.value;
-      filled = true;
-    } else {
-      filled = false;
-    }
-    return *this;
-  }
 };
 }  // namespace hpmr
