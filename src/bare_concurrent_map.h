@@ -59,7 +59,8 @@ class BareConcurrentMap {
   void from_string(const std::string& str);
 
   void for_each(
-      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler);
+      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler,
+      const bool verbose = false);
 
  private:
   float max_load_factor;
@@ -275,11 +276,16 @@ void BareConcurrentMap<K, V, H>::from_string(const std::string& str) {
 
 template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::for_each(
-    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
-#pragma omp parallel for
+    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler,
+    const bool verbose) {
+#pragma omp parallel for schedule(static, 1)
   for (size_t i = 0; i < n_segments; i++) {
     segments.at(i).for_each(handler);
+    if (verbose && omp_get_thread_num() == 0) {
+      printf("%zu/%zu ", i / n_threads, N_SEGMENTS_PER_THREAD);
+    }
   }
+  if (verbose) printf("#\n");
 }
 
 template <class K, class V, class H>

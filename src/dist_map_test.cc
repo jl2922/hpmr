@@ -27,7 +27,7 @@ TEST(DistMapTest, SetAndGet) {
   hpmr::DistMap<std::string, int> m;
   m.async_set("aa", 1);
   m.sync();
-  EXPECT_EQ(m.get("aa", 0), 1);
+  EXPECT_EQ(m.get("aa"), 1);
 }
 
 TEST(DistMapTest, GetAndSetLoadFactorAutoRehash) {
@@ -68,21 +68,21 @@ TEST(DistMapTest, ClearAndShrink) {
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
 }
 
-// TEST(DistMapTest, MapReduce) {
-//   hpmr::DistMap<std::string, long long> m;
-//   constexpr long long N_KEYS = 10;
-//   m.reserve(N_KEYS);
-// // #pragma omp parallel for
-//   for (long long i = 0; i < N_KEYS; i++) {
-//     m.async_set(std::to_string(i), i);
-//   }
-//   m.sync();
-//   const auto& mapper = [](const std::string& key,
-//                           const long long value,
-//                           const std::function<void(const int, const long long)>& emit) {
-//     emit(0, 1);
-//     printf("emiting: %s\n", key.c_str());
-//   };
-//   auto res = m.mapreduce<int, long long>(mapper, hpmr::Reducer<long long>::sum, true);
-//   EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
-// }
+TEST(DistMapTest, LargeMapReduce) {
+  hpmr::DistMap<std::string, long long> m;
+  constexpr long long N_KEYS = 1000000;
+  m.reserve(N_KEYS);
+#pragma omp parallel for
+  for (long long i = 0; i < N_KEYS; i++) {
+    m.async_set(std::to_string(i), i);
+  }
+  m.sync();
+  EXPECT_EQ(m.get_n_keys(), N_KEYS);
+  const auto& mapper = [](const std::string&,
+                          const long long value,
+                          const std::function<void(const int, const long long)>& emit) {
+    emit(0, value);
+  };
+  auto res = m.mapreduce<int, long long>(mapper, hpmr::Reducer<long long>::sum, true);
+  EXPECT_EQ(res.get(0), N_KEYS * (N_KEYS - 1) / 2);
+}

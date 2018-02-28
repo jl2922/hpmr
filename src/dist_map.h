@@ -1,10 +1,12 @@
 #pragma once
 
+#include <mpi.h>
 #include <cstdlib>
 #include <ctime>
 #include <functional>
 #include "bare_concurrent_map.h"
 #include "dist_hasher.h"
+#include "mpi_type.h"
 #include "reducer.h"
 
 namespace hpmr {
@@ -153,7 +155,6 @@ void DistMap<K, V, H>::sync(
   if (report) printf("Syncing: ");
 
   const auto& node_handler = [&](const K& key, const size_t hash_value, const V& value) {
-    // printf("%d got %d (%zu)\n", proc_id, value, hash_value);
     local_map.async_set(key, hash_value, value, reducer);
   };
 
@@ -205,9 +206,9 @@ void DistMap<K, V, H>::sync(
     remote_maps[dest_proc_id].from_string(recv_buf);
     remote_maps[dest_proc_id].for_each(node_handler);
     remote_maps[dest_proc_id].clear();
-    if (report) printf("%d/%d ", i, n_procs - 1);
+    if (report) printf("%d/%d ", i - 1, n_procs - 1);
   }
-  local_map.sync();
+  local_map.sync(reducer);
   if (report) printf("#\n");
 }
 
@@ -273,9 +274,7 @@ DistMap<KR, VR, HR> DistMap<K, V, H>::mapreduce(
   const auto& node_handler = [&](const K& key, const size_t, const V& value) {
     mapper(key, value, emit);
   };
-  local_map.for_each(node_handler);
-
-  if (report) printf("#\n");
+  local_map.for_each(node_handler, verbose && proc_id == 0);
 
   res.sync(reducer, verbose);
 
