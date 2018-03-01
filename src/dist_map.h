@@ -90,7 +90,6 @@ void DistMap<K, V, H>::reserve(const size_t n_keys_min) {
 template <class K, class V, class H>
 size_t DistMap<K, V, H>::get_n_keys() {
   const size_t local_n_keys = local_map.get_n_keys();
-  // printf("local_n_keys: %zu\n", local_n_keys);
   size_t n_keys;
   MPI_Allreduce(&local_n_keys, &n_keys, 1, MpiType<size_t>::value, MPI_SUM, MPI_COMM_WORLD);
   return n_keys;
@@ -124,10 +123,8 @@ void DistMap<K, V, H>::async_set(
   const size_t dest_proc_id = hash_value % n_procs_u;
   const size_t dist_hash_value = hash_value / n_procs_u;
   if (dest_proc_id == static_cast<size_t>(proc_id)) {
-    // printf("%d local aset %d (%zu)\n", proc_id, value, dist_hash_value);
     local_map.async_set(key, dist_hash_value, value, reducer);
   } else {
-    // printf("%d remote aset %d (%zu)\n", proc_id, value, dist_hash_value);
     remote_maps[dest_proc_id].async_set(key, dist_hash_value, value, reducer);
   }
 }

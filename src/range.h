@@ -15,6 +15,8 @@ class Range {
       const std::function<void(V&, const V&)>& reducer,
       const bool verbose = false);
 
+  // TODO: local map reduce to a concurrent map.
+
  private:
   T start;
 

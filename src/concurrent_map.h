@@ -1,99 +1,74 @@
-// #pragma once
 
-// #include "bare_concurrent_map.h"
-// #include "dist_map.h"
-// #include "reducer.h"
 
-// namespace hpmr {
+#pragma once
 
-// template <class K, class V, class H = std::hash<K>>
-// class ConcurrentMap {
-//  public:
-//   void reserve(const size_t n_buckets_min) { bare_map.reserve(n_buckets_min); }
+#include "bare_concurrent_map.h"
+#include "dist_map.h"
+#include "reducer.h"
 
-//   size_t get_n_buckets() const { return bare_map.get_n_buckets(); };
+namespace hpmr {
 
-//   double get_load_factor() const { return bare_map.get_load_factor(); }
+template <class K, class V, class H = std::hash<K>>
+class ConcurrentMap {
+ public:
+  void reserve(const size_t n_keys_min) { bare_map.reserve(n_keys_min); }
 
-//   double get_max_load_factor() const { return bare_map.get_max_load_factor(); }
+  size_t get_n_keys() const { return bare_map.get_n_keys(); }
 
-//   void set_max_load_factor(const double max_load_factor) {
-//     bare_map.set_max_load_factor(max_load_factor);
-//   }
+  size_t get_n_buckets() const { return bare_map.get_n_buckets(); };
 
-//   size_t get_n_keys() const { return bare_map.get_n_keys(); }
+  float get_load_factor() const { return bare_map.get_load_factor(); }
 
-//   void set(
-//       const K& key,
-//       const V& value,
-//       const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite) {
-//     bare_map.set(key, get_hash_value(key), value, reducer);
-//   }
+  float get_max_load_factor() const { return bare_map.get_max_load_factor(); }
 
-//   void get(const K& key, const std::function<void(const V&)>& handler) {
-//     bare_map.get(key, get_hash_value(key), handler);
-//   }
+  void set_max_load_factor(const float max_load_factor) {
+    bare_map.set_max_load_factor(max_load_factor);
+  }
 
-//   V get(const K& key, const V& default_value = V()) {
-//     return bare_map.get(key, get_hash_value(key), default_value);
-//   }
+  void set(
+      const K& key,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite) {
+    bare_map.set(key, hasher(key), value, reducer);
+  }
 
-//   void unset(const K& key) { bare_map.unset(key, get_hash_value(key)); }
+  void async_set(
+      const K& key,
+      const V& value,
+      const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite) {
+    bare_map.async_set(key, hasher(key), value, reducer);
+  }
 
-//   bool has(const K& key) { return bare_map.has(key, get_hash_value(key)); }
+  void sync(const std::function<void(V&, const V&)>& reducer = Reducer<V>::overwrite) {
+    bare_map.sync(reducer);
+  }
 
-//   void clear() { bare_map.clear(); }
+  V get(const K& key, const V& default_value = V()) {
+    return bare_map.get(key, hasher(key), default_value);
+  }
 
-//   void clear_and_shrink() { bare_map.clear_and_shrink(); }
+  void unset(const K& key) { bare_map.unset(key, hasher(key)); }
 
-//   template <class KR, class VR, class HR = std::hash<KR>>
-//   DistMap<KR, VR, HR> mapreduce(
-//       const std::function<
-//           void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>& mapper,
-//       const std::function<void(VR&, const VR&)>& reducer,
-//       const bool verbose = false);
+  bool has(const K& key) { return bare_map.has(key, hasher(key)); }
 
-//  private:
-//   BareConcurrentMap<K, V, H> bare_map;
+  void clear() { bare_map.clear(); }
 
-//   size_t get_hash_value(const K& key) { return bare_map.get_hash_value(key); }
-// };
+  void clear_and_shrink() { bare_map.clear_and_shrink(); }
 
-// template <class K, class V, class H>
-// template <class KR, class VR, class HR>
-// DistMap<KR, VR, HR> ConcurrentMap<K, V, H>::mapreduce(
-//     const std::function<void(const K&, const V&, const std::function<void(const KR&, const VR&)>&)>&
-//         mapper,
-//     const std::function<void(VR&, const VR&)>& reducer,
-//     const bool verbose) {
-//   DistMap<KR, VR, HR> res;
-//   const int proc_id = Parallel::get_proc_id();
-//   const int n_procs = Parallel::get_n_procs();
-//   const int n_threads = Parallel::get_n_threads();
-//   double target_progress = 0.1;
+  void for_each(
+      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler,
+      const bool verbose) {
+    bare_map.for_each(handler, verbose);
+  }
 
-//   const auto& emit = [&](const KR& key, const VR& value) { res.async_set(key, value, reducer); };
-//   if (verbose && proc_id == 0) {
-//     printf("MapReduce on %d node(s) (%d threads): ", n_procs, n_threads * n_procs);
-//   }
+  // TODO: convert to dist map.
 
-//   const auto& node_handler = [&](std::unique_ptr<HashNode<K, V>>& node, const double progress) {
-//     mapper(node->key, node->value, emit);
-//     const int thread_id = Parallel::get_thread_id();
-//     if (verbose && proc_id == 0 && thread_id == 0) {
-//       while (target_progress <= progress) {
-//         printf("%.1f%% ", target_progress);
-//         target_progress *= 2;
-//       }
-//     }
-//   };
-//   bare_map.all_node_apply(node_handler);
+  // TODO: local mapreduce to a new concurrent map.
 
-//   res.sync(reducer, verbose);
+ private:
+  H hasher;
 
-//   if (verbose && proc_id == 0) printf("Done\n");
+  BareConcurrentMap<K, V, H> bare_map;
+};
 
-//   return res;
-// }
-
-// }  // namespace hpmr
+}  // namespace hpmr

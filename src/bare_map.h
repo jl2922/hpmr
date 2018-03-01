@@ -28,7 +28,7 @@ class BareMap {
 
   void reserve_n_buckets(const size_t n_buckets_min);
 
-  size_t get_n_buckets() { return n_buckets; }
+  size_t get_n_buckets() const { return n_buckets; }
 
   void set(
       const K& key,

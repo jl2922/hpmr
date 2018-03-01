@@ -22,11 +22,11 @@ class BareConcurrentMap {
 
   void set_max_load_factor(const float max_load_factor);
 
-  float get_max_load_factor() { return max_load_factor; };
+  float get_max_load_factor() const { return max_load_factor; };
 
-  size_t get_n_keys();
+  size_t get_n_keys() const;
 
-  size_t get_n_buckets();
+  size_t get_n_buckets() const;
 
   float get_load_factor();
 
@@ -126,14 +126,14 @@ void BareConcurrentMap<K, V, H>::set_max_load_factor(const float max_load_factor
 }
 
 template <class K, class V, class H>
-size_t BareConcurrentMap<K, V, H>::get_n_keys() {
+size_t BareConcurrentMap<K, V, H>::get_n_keys() const {
   size_t n_keys = 0;
   for (size_t i = 0; i < n_segments; i++) n_keys += segments.at(i).n_keys;
   return n_keys;
 }
 
 template <class K, class V, class H>
-size_t BareConcurrentMap<K, V, H>::get_n_buckets() {
+size_t BareConcurrentMap<K, V, H>::get_n_buckets() const {
   size_t n_buckets = 0;
   for (size_t i = 0; i < n_segments; i++) n_buckets += segments.at(i).get_n_buckets();
   return n_buckets;
@@ -145,7 +145,6 @@ void BareConcurrentMap<K, V, H>::async_set(
     const size_t hash_value,
     const V& value,
     const std::function<void(V&, const V&)>& reducer) {
-  // const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   if (omp_test_lock(&lock)) {
@@ -164,7 +163,6 @@ void BareConcurrentMap<K, V, H>::sync(const std::function<void(V&, const V&)>& r
     const int thread_id = omp_get_thread_num();
     const auto& handler = [&](const K& key, const size_t hash_value, const V& value) {
       const size_t segment_id = hash_value % n_segments;
-      // const size_t segment_hash_value = hash_value / n_segments;
       auto& lock = segment_locks[segment_id];
       omp_set_lock(&lock);
       segments.at(segment_id).set(key, hash_value, value, reducer);
@@ -181,7 +179,6 @@ void BareConcurrentMap<K, V, H>::set(
     const size_t hash_value,
     const V& value,
     const std::function<void(V&, const V&)>& reducer) {
-  // const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   omp_set_lock(&lock);
@@ -191,7 +188,6 @@ void BareConcurrentMap<K, V, H>::set(
 
 template <class K, class V, class H>
 V BareConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
-  // const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   omp_set_lock(&lock);
@@ -202,7 +198,6 @@ V BareConcurrentMap<K, V, H>::get(const K& key, const size_t hash_value, const V
 
 template <class K, class V, class H>
 void BareConcurrentMap<K, V, H>::unset(const K& key, const size_t hash_value) {
-  // const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   omp_set_lock(&lock);
@@ -212,7 +207,6 @@ void BareConcurrentMap<K, V, H>::unset(const K& key, const size_t hash_value) {
 
 template <class K, class V, class H>
 bool BareConcurrentMap<K, V, H>::has(const K& key, const size_t hash_value) {
-  // const size_t segment_hash_value = hash_value / n_segments;
   const size_t segment_id = hash_value % n_segments;
   auto& lock = segment_locks[segment_id];
   omp_set_lock(&lock);

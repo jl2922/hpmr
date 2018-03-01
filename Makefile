@@ -42,10 +42,10 @@ TEST_LIB := $(BUILD_DIR)/libgtest.a
 all: test
 
 test: $(TEST_EXE)
-	./$(TEST_EXE) # --gtest_filter=DistMapTest.*MapReduce
+	./$(TEST_EXE)
 
 test_mpi: $(TEST_EXE)
-	mpirun -n 4 ./$(TEST_EXE) # --gtest_filter=DistMapTest.*MapReduce
+	mpirun -n 4 ./$(TEST_EXE)
 
 clean:
 	rm -rf $(BUILD_DIR)
