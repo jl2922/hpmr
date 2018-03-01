@@ -55,7 +55,17 @@ TEST(ConcurrentMapTest, SetAndGet) {
 
   hpmr::ConcurrentMap<std::string, int> m2;
   m2.set("cc", 3, hpmr::Reducer<int>::sum);
-  m2.get("cc", [](const int value) { EXPECT_EQ(value, 3); });
+  EXPECT_EQ(m2.get("cc"), 3);
+}
+
+TEST(ConcurrentMapTest, AsyncSetAndGet) {
+  hpmr::ConcurrentMap<std::string, int> m;
+  m.async_set("aa", 0);
+  m.async_set("aa", 1);
+  m.async_set("bb", 2);
+  m.sync();
+  EXPECT_EQ(m.get("aa"), 1);
+  EXPECT_EQ(m.get("bb"), 2);
 }
 
 TEST(ConcurrentMapTest, Unset) {
@@ -88,7 +98,7 @@ TEST(ConcurrentMapTest, Clear) {
 
 TEST(ConcurrentMapTest, ClearAndShrink) {
   hpmr::ConcurrentMap<int, int> m;
-  constexpr int N_KEYS = 100;
+  constexpr int N_KEYS = 100000;
   for (int i = 0; i < N_KEYS; i++) {
     m.set(i, i);
   }
@@ -97,31 +107,4 @@ TEST(ConcurrentMapTest, ClearAndShrink) {
   m.clear_and_shrink();
   EXPECT_EQ(m.get_n_keys(), 0);
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.get_max_load_factor());
-}
-
-TEST(ConcurrentMapTest, MapReduce) {
-  hpmr::ConcurrentMap<std::string, int> m;
-  m.set("aa", 1);
-  m.set("bbb", 2);
-  const auto& mapper = [](const std::string&,
-                          const int value,
-                          const std::function<void(const int, const int)>& emit) {
-    emit(0, value);
-  };
-  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(res.get(0), 3 * hpmr::Parallel::get_n_procs());
-}
-
-TEST(ConcurrentMapTest, ParallelMapReduce) {
-  hpmr::ConcurrentMap<int, int> m;
-  constexpr int N_KEYS = 1000;
-#pragma omp parallel for
-  for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, i);
-  }
-  const auto& mapper = [](const int,
-                          const int,
-                          const std::function<void(const int, const int)>& emit) { emit(0, 1); };
-  auto res = m.mapreduce<int, int>(mapper, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(res.get(0), N_KEYS * hpmr::Parallel::get_n_procs());
 }

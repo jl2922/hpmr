@@ -7,5 +7,4 @@
 
 // Utility libraries.
 #include "mpi_type.h"
-#include "parallel.h"
 #include "reducer.h"
