@@ -13,19 +13,18 @@ class HashSet : public BareSet<K, H> {
 
   bool has(const K& key) { return BareSet<K, H>::has(key, hasher(key)); }
 
-  void for_each(const std::function<void(const K& key)>& handler) const;
-
  private:
   H hasher;
 };
-
-template <class K, class H>
-void HashSet<K, H>::for_each(const std::function<void(const K& key)>& handler) const {
-  if (n_keys == 0) return;
-  for (size_t i = 0; i < n_buckets; i++) {
-    if (buckets.at(i).filled) {
-      handler(buckets.at(i).key;
-    }
-  }
-}
 }  // namespace hpmr
+
+namespace hps {
+template <class K, class H, class B>
+class Serializer<hpmr::HashSet<K, H>, B> {
+ public:
+  static void serialize(const hpmr::HashSet<K, H>& set, OutputBuffer<B>& buf) {
+    set.serialize(buf);
+  }
+  static void parse(hpmr::HashSet<K, H>& set, InputBuffer<B>& buf) { set.parse(buf); }
+};
+}  // namespace hps

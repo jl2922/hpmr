@@ -19,6 +19,8 @@ class BareSet : public BareHashContainer<K, void, H> {
 
   using BareHashContainer<K, void, H>::max_load_factor;
 
+  using BareHashContainer<K, void, H>::reserve_n_buckets;
+
  protected:
   using BareHashContainer<K, void, H>::n_keys;
 
@@ -27,8 +29,6 @@ class BareSet : public BareHashContainer<K, void, H> {
   using BareHashContainer<K, void, H>::buckets;
 
   using BareHashContainer<K, void, H>::check_balance;
-
-  using BareHashContainer<K, void, H>::reserve_n_buckets;
 };
 
 template <class K, class H>
@@ -67,9 +67,9 @@ namespace hps {
 template <class K, class H, class B>
 class Serializer<hpmr::BareSet<K, H>, B> {
  public:
-  static void serialize(const hpmr::BareSet<K, H>& map, OutputBuffer<B>& buf) {
-    map.serialize(buf);
+  static void serialize(const hpmr::BareSet<K, H>& set, OutputBuffer<B>& buf) {
+    set.serialize(buf);
   }
-  static void parse(hpmr::BareSet<K, H>& map, InputBuffer<B>& buf) { map.parse(buf); }
+  static void parse(hpmr::BareSet<K, H>& set, InputBuffer<B>& buf) { set.parse(buf); }
 };
 }  // namespace hps

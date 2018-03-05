@@ -26,6 +26,8 @@ class BareMap : public BareHashContainer<K, V, H> {
 
   using BareHashContainer<K, V, H>::max_load_factor;
 
+  using BareHashContainer<K, V, H>::reserve_n_buckets;
+
  protected:
   using BareHashContainer<K, V, H>::n_keys;
 
@@ -34,8 +36,6 @@ class BareMap : public BareHashContainer<K, V, H> {
   using BareHashContainer<K, V, H>::buckets;
 
   using BareHashContainer<K, V, H>::check_balance;
-
-  using BareHashContainer<K, V, H>::reserve_n_buckets;
 };
 
 template <class K, class V, class H>
