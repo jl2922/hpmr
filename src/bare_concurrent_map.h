@@ -4,8 +4,6 @@
 #include <functional>
 #include <numeric>
 #include "bare_map.h"
-#include "bare_map_serializer.h"
-// #include "segment_hasher.h"
 
 namespace hpmr {
 // A concurrent map that requires providing hash values when use.
@@ -128,7 +126,7 @@ void BareConcurrentMap<K, V, H>::set_max_load_factor(const float max_load_factor
 template <class K, class V, class H>
 size_t BareConcurrentMap<K, V, H>::get_n_keys() const {
   size_t n_keys = 0;
-  for (size_t i = 0; i < n_segments; i++) n_keys += segments.at(i).n_keys;
+  for (size_t i = 0; i < n_segments; i++) n_keys += segments.at(i).get_n_keys();
   return n_keys;
 }
 
