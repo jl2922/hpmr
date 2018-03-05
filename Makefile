@@ -23,7 +23,8 @@ ifneq ($(wildcard $(LOCAL_MAKEFILE)),)
 endif
 
 # Sources and intermediate objects.
-TESTS := $(shell find $(SRC_DIR) -name "*_test.cc")
+# TESTS := $(shell find $(SRC_DIR) -name "*_test.cc")
+TESTS := $(SRC_DIR)/bare_map_test.cc # $(SRC_DIR)/hash_set_test.cc
 HEADERS := $(shell find $(SRC_DIR) -name "*.h" -or -name "*.inl")
 TEST_OBJS := $(TESTS:$(SRC_DIR)/%.cc=$(BUILD_DIR)/%.o)
 GTEST_DIR := googletest/googletest

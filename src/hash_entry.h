@@ -21,4 +21,24 @@ class HashEntry {
     filled = true;
   }
 };
+
+// For hash set.
+template <class K>
+class HashEntry<K, void> {
+ public:
+  K key;
+
+  size_t hash_value;
+
+  bool filled;
+
+  HashEntry() : filled(false){};
+
+  void fill(const K& key, const size_t hash_value) {
+    this->key = key;
+    this->hash_value = hash_value;
+    filled = true;
+  }
+};
+
 }  // namespace hpmr

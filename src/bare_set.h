@@ -13,16 +13,9 @@ namespace hpmr {
 template <class K, class V, class H = std::hash<K>>
 class BareMap : public BareHashContainer<K, V, H> {
  public:
-  void set(
-      const K& key,
-      const size_t hash_value,
-      const V& value,
-      const std::function<void(V&, const V&)>& reducer = hpmr::Reducer<V>::overwrite);
+  void set(const K& key, const size_t hash_value);
 
-  V get(const K& key, const size_t hash_value, const V& default_value = V());
-
-  void for_each(
-      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler);
+  void for_each(const std::function<void(const K& key, const size_t hash_value)>& handler);
 
   using BareHashContainer<K, V, H>::max_load_factor;
 
@@ -39,11 +32,7 @@ class BareMap : public BareHashContainer<K, V, H> {
 };
 
 template <class K, class V, class H>
-void BareMap<K, V, H>::set(
-    const K& key,
-    const size_t hash_value,
-    const V& value,
-    const std::function<void(V&, const V&)>& reducer) {
+void BareMap<K, V, H>::set(const K& key, const size_t hash_value) {
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
@@ -53,7 +42,6 @@ void BareMap<K, V, H>::set(
       if (n_buckets * max_load_factor <= n_keys) reserve_n_buckets(n_buckets * 2);
       break;
     } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
-      reducer(buckets.at(bucket_id).value, value);
       break;
     } else {
       n_probes++;
@@ -64,29 +52,12 @@ void BareMap<K, V, H>::set(
 }
 
 template <class K, class V, class H>
-V BareMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
-  size_t bucket_id = hash_value % n_buckets;
-  size_t n_probes = 0;
-  while (n_probes < n_buckets) {
-    if (!buckets.at(bucket_id).filled) {
-      return default_value;
-    } else if (buckets.at(bucket_id).hash_value == hash_value && buckets.at(bucket_id).key == key) {
-      return buckets.at(bucket_id).value;
-    } else {
-      n_probes++;
-      bucket_id = (bucket_id + 1) % n_buckets;
-    }
-  }
-  return default_value;
-}
-
-template <class K, class V, class H>
 void BareMap<K, V, H>::for_each(
-    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
+    const std::function<void(const K& key, const size_t hash_value)>& handler) {
   if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
     if (buckets.at(i).filled) {
-      handler(buckets.at(i).key, buckets.at(i).hash_value, buckets.at(i).value);
+      handler(buckets.at(i).key, buckets.at(i).hash_value);
     }
   }
 }

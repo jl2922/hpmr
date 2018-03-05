@@ -1,7 +1,7 @@
-#include "bare_map.h"
+#include "bare_set.h"
 
 #include <gtest/gtest.h>
-#include <unordered_map>
+#include <unordered_set>
 #include "reducer.h"
 
 TEST(BareMapTest, Initialization) {
