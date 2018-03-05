@@ -19,10 +19,10 @@ class BareMap : public BareHashContainer<K, V, H> {
       const V& value,
       const std::function<void(V&, const V&)>& reducer = hpmr::Reducer<V>::overwrite);
 
-  V get(const K& key, const size_t hash_value, const V& default_value = V());
+  V get(const K& key, const size_t hash_value, const V& default_value = V()) const;
 
-  void for_each(
-      const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler);
+  void for_each(const std::function<void(const K& key, const size_t hash_value, const V& value)>&
+                    handler) const;
 
   using BareHashContainer<K, V, H>::max_load_factor;
 
@@ -64,7 +64,7 @@ void BareMap<K, V, H>::set(
 }
 
 template <class K, class V, class H>
-V BareMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) {
+V BareMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_value) const {
   size_t bucket_id = hash_value % n_buckets;
   size_t n_probes = 0;
   while (n_probes < n_buckets) {
@@ -82,7 +82,8 @@ V BareMap<K, V, H>::get(const K& key, const size_t hash_value, const V& default_
 
 template <class K, class V, class H>
 void BareMap<K, V, H>::for_each(
-    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler) {
+    const std::function<void(const K& key, const size_t hash_value, const V& value)>& handler)
+    const {
   if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
     if (buckets.at(i).filled) {

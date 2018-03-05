@@ -1,5 +1,4 @@
 #include "hash_set.h"
-#include "bare_map_serializer.h"
 
 #include <gtest/gtest.h>
 #include <unordered_set>

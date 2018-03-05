@@ -15,7 +15,7 @@ class BareSet : public BareHashContainer<K, void, H> {
  public:
   void set(const K& key, const size_t hash_value);
 
-  void for_each(const std::function<void(const K& key, const size_t hash_value)>& handler);
+  void for_each(const std::function<void(const K& key, const size_t hash_value)>& handler) const;
 
   using BareHashContainer<K, void, H>::max_load_factor;
 
@@ -53,7 +53,7 @@ void BareSet<K, H>::set(const K& key, const size_t hash_value) {
 
 template <class K, class H>
 void BareSet<K, H>::for_each(
-    const std::function<void(const K& key, const size_t hash_value)>& handler) {
+    const std::function<void(const K& key, const size_t hash_value)>& handler) const {
   if (n_keys == 0) return;
   for (size_t i = 0; i < n_buckets; i++) {
     if (buckets.at(i).filled) {
