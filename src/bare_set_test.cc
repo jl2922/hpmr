@@ -4,98 +4,96 @@
 #include <unordered_set>
 #include "reducer.h"
 
-TEST(BareMapTest, Initialization) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, Initialization) {
+  hpmr::BareSet<std::string> m;
   EXPECT_EQ(m.get_n_keys(), 0);
 }
 
-TEST(BareMapTest, CopyConstructor) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, CopyConstructor) {
+  hpmr::BareSet<std::string> m;
   std::hash<std::string> hasher;
-  m.set("aa", hasher("aa"), 0);
-  EXPECT_EQ(m.get("aa", hasher("aa")), 0);
-  m.set("bb", hasher("bb"), 1);
-  EXPECT_EQ(m.get("bb", hasher("bb")), 1);
+  m.set("aa", hasher("aa"));
+  EXPECT_TRUE(m.has("aa", hasher("aa")));
+  m.set("bb", hasher("bb"));
+  EXPECT_TRUE(m.has("bb", hasher("bb")));
 
-  hpmr::BareMap<std::string, int> m2(m);
-  EXPECT_EQ(m2.get("aa", hasher("aa")), 0);
-  EXPECT_EQ(m2.get("bb", hasher("bb")), 1);
+  hpmr::BareSet<std::string> m2(m);
+  EXPECT_TRUE(m2.has("aa", hasher("aa")));
+  EXPECT_TRUE(m2.has("bb", hasher("bb")));
 }
 
-TEST(BareMapTest, Reserve) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, Reserve) {
+  hpmr::BareSet<std::string> m;
   m.reserve(100);
   EXPECT_GE(m.get_n_buckets(), 100);
 }
 
-TEST(BareMapTest, LargeReserve) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, LargeReserve) {
+  hpmr::BareSet<std::string> m;
   const int N_KEYS = 1000000;
   m.reserve(N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS);
 }
 
-TEST(BareMapTest, MaxLoadFactorAndAutoRehash) {
-  hpmr::BareMap<int, int> m;
+TEST(BareSetTest, MaxLoadFactorAndAutoRehash) {
+  hpmr::BareSet<int> m;
   constexpr int N_KEYS = 100;
   m.max_load_factor = 0.5;
   std::hash<int> hasher;
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, hasher(i), i);
+    m.set(i, hasher(i));
   }
   EXPECT_GE(m.get_n_buckets(), N_KEYS / 0.5);
 }
 
-TEST(BareMapTest, SetAndGet) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, SetAndHas) {
+  hpmr::BareSet<std::string> m;
   std::hash<std::string> hasher;
-  m.set("aa", hasher("aa"), 0);
-  EXPECT_EQ(m.get("aa", hasher("aa")), 0);
-  m.set("aa", hasher("aa"), 1);
-  EXPECT_EQ(m.get("aa", hasher("aa"), 0), 1);
-  m.set("aa", hasher("aa"), 2, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(m.get("aa", hasher("aa")), 3);
-  m.set("cc", hasher("cc"), 3, hpmr::Reducer<int>::sum);
-  EXPECT_EQ(m.get("cc", hasher("cc")), 3);
+  m.set("aa", hasher("aa"));
+  EXPECT_TRUE(m.has("aa", hasher("aa")));
+  m.set("aa", hasher("aa"));
+  EXPECT_TRUE(m.has("aa", hasher("aa")));
+  m.set("cc", hasher("cc"));
+  EXPECT_TRUE(m.has("cc", hasher("cc")));
 }
 
-TEST(BareMapTest, LargeSetAndGetSTLComparison) {
+TEST(BareSetTest, LargeSetAndHasSTLComparison) {
   constexpr long long N_KEYS = 1000000;
-  std::unordered_map<long long, int> m;
+  std::unordered_set<long long> m;
   m.reserve(N_KEYS);
-  for (long long i = 0; i < N_KEYS; i++) m[i * i] = i;
-  for (long long i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m[i * i], i);
+  for (long long i = 0; i < N_KEYS; i++) m.insert(i * i);
+  for (long long i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.count(i * i), 1);
 }
 
-TEST(BareMapTest, LargeSetAndGet) {
-  hpmr::BareMap<long long, int> m;
+TEST(BareSetTest, LargeSetAndHas) {
+  hpmr::BareSet<long long> m;
   constexpr long long N_KEYS = 1000000;
   m.reserve(N_KEYS);
   std::hash<long long> hasher;
-  for (long long i = 0; i < N_KEYS; i++) m.set(i * i, hasher(i * i), i);
-  for (long long i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.get(i * i, hasher(i * i)), i);
+  for (long long i = 0; i < N_KEYS; i++) m.set(i * i, hasher(i * i));
+  for (long long i = 0; i < N_KEYS; i += 10) EXPECT_TRUE(m.has(i * i, hasher(i * i)));
 }
 
-TEST(BareMapTest, LargeAutoRehashSetAndGetSTLComparison) {
+TEST(BareSetTest, LargeAutoRehashSetAndHasSTLComparison) {
   constexpr int N_KEYS = 1000000;
-  std::unordered_map<int, int> m;
-  for (int i = 0; i < N_KEYS; i++) m[i] = i;
-  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m[i], i);
+  std::unordered_set<int> m;
+  for (int i = 0; i < N_KEYS; i++) m.insert(i * i);
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.count(i * i), 1);
 }
 
-TEST(BareMapTest, LargeAutoRehashSetAndGet) {
-  hpmr::BareMap<int, int> m;
+TEST(BareSetTest, LargeAutoRehashSetAndHas) {
+  hpmr::BareSet<int> m;
   constexpr int N_KEYS = 1000000;
   std::hash<int> hasher;
-  for (int i = 0; i < N_KEYS; i++) m.set(i, hasher(i), i);
-  for (int i = 0; i < N_KEYS; i += 10) EXPECT_EQ(m.get(i, hasher(i)), i);
+  for (int i = 0; i < N_KEYS; i++) m.set(i * i, hasher(i * i));
+  for (int i = 0; i < N_KEYS; i += 10) EXPECT_TRUE(m.has(i * i, hasher(i * i)));
 }
 
-TEST(BareMapTest, UnsetAndHas) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, UnsetAndHas) {
+  hpmr::BareSet<std::string> m;
   std::hash<std::string> hasher;
-  m.set("aa", hasher("aa"), 1);
-  m.set("bbb", hasher("bbb"), 2);
+  m.set("aa", hasher("aa"));
+  m.set("bbb", hasher("bbb"));
   EXPECT_TRUE(m.has("aa", hasher("aa")));
   EXPECT_TRUE(m.has("bbb", hasher("bbb")));
   m.unset("aa", hasher("aa"));
@@ -110,42 +108,42 @@ TEST(BareMapTest, UnsetAndHas) {
   EXPECT_FALSE(m.has("bbb", hasher("bbb")));
   EXPECT_EQ(m.get_n_keys(), 0);
 
-  hpmr::BareMap<int, int> m2;
+  hpmr::BareSet<int> m2;
   constexpr int N_KEYS = 100;
   m2.max_load_factor = 0.99;
   m2.reserve(N_KEYS);
   std::hash<int> hasher2;
   for (int i = 0; i < N_KEYS; i++) {
-    m2.set(i * i, hasher2(i * i), i);
+    m2.set(i * i, hasher2(i * i));
   }
   for (int i = 0; i < N_KEYS; i += 3) {
     m2.unset(i * i, hasher2(i * i));
   }
   for (int i = 0; i < N_KEYS; i++) {
     if (i % 3 == 0) {
-      EXPECT_FALSE(m2.get(i * i, hasher2(i * i)));
+      EXPECT_FALSE(m2.has(i * i, hasher2(i * i)));
     } else {
-      EXPECT_TRUE(m2.get(i * i, hasher2(i * i)));
+      EXPECT_TRUE(m2.has(i * i, hasher2(i * i)));
     }
   }
 }
 
-TEST(BareMapTest, Clear) {
-  hpmr::BareMap<std::string, int> m;
+TEST(BareSetTest, Clear) {
+  hpmr::BareSet<std::string> m;
   std::hash<std::string> hasher;
-  m.set("aa", hasher("aa"), 1);
-  m.set("bbb", hasher("bbb"), 2);
+  m.set("aa", hasher("aa"));
+  m.set("bbb", hasher("bbb"));
   EXPECT_EQ(m.get_n_keys(), 2);
   m.clear();
   EXPECT_EQ(m.get_n_keys(), 0);
 }
 
-TEST(BareMapTest, ClearAndShrink) {
-  hpmr::BareMap<int, int> m;
+TEST(BareSetTest, ClearAndShrink) {
+  hpmr::BareSet<int> m;
   std::hash<int> hasher;
   constexpr int N_KEYS = 100;
   for (int i = 0; i < N_KEYS; i++) {
-    m.set(i, hasher(i), i);
+    m.set(i, hasher(i));
   }
   EXPECT_EQ(m.get_n_keys(), N_KEYS);
   EXPECT_GE(m.get_n_buckets(), N_KEYS * m.max_load_factor);
@@ -154,15 +152,15 @@ TEST(BareMapTest, ClearAndShrink) {
   EXPECT_LT(m.get_n_buckets(), N_KEYS * m.max_load_factor);
 }
 
-TEST(BareMapTest, ToAndFromString) {
-  hpmr::BareMap<std::string, int> m1;
+TEST(BareSetTest, ToAndFromString) {
+  hpmr::BareSet<std::string> m1;
   std::hash<std::string> hasher;
-  m1.set("aa", hasher("aa"), 1);
-  m1.set("bbb", hasher("bbb"), 2);
+  m1.set("aa", hasher("aa"));
+  m1.set("bbb", hasher("bbb"));
   const std::string serialized = hps::serialize_to_string(m1);
-  hpmr::BareMap<std::string, int> m2;
+  hpmr::BareSet<std::string> m2;
   hps::parse_from_string(m2, serialized);
   EXPECT_EQ(m2.get_n_keys(), 2);
-  EXPECT_EQ(m2.get("aa", hasher("aa")), 1);
-  EXPECT_EQ(m2.get("bbb", hasher("bbb")), 2);
+  EXPECT_TRUE(m2.has("aa", hasher("aa")));
+  EXPECT_TRUE(m2.has("bbb", hasher("bbb")));
 }
